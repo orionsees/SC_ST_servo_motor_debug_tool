@@ -1,0 +1,1092 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1180</width>
+    <height>820</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>MainWindow</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QHBoxLayout" name="centralLayout"><property name="spacing"><number>10</number></property><property name="leftMargin"><number>10</number></property><property name="topMargin"><number>10</number></property><property name="rightMargin"><number>10</number></property><property name="bottomMargin"><number>10</number></property><item><layout class="QVBoxLayout" name="leftColumnLayout"><property name="spacing"><number>10</number></property><item><widget class="QGroupBox" name="ComSeetingsGroup">
+    <property name="maximumSize"><size><width>245</width><height>16777215</height></size></property><property name="sizePolicy"><sizepolicy hsizetype="Preferred" vsizetype="Fixed"><horstretch>0</horstretch><verstretch>0</verstretch></sizepolicy></property><property name="minimumSize"><size><width>190</width><height>0</height></size></property><property name="title">
+     <string>Com Settings</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+    </property>
+    <property name="checkable">
+     <bool>false</bool>
+    </property>
+    <layout class="QVBoxLayout" name="verticalLayout">
+      <property name="leftMargin">
+       <number>5</number>
+      </property>
+      <property name="topMargin">
+       <number>10</number>
+      </property>
+      <property name="rightMargin">
+       <number>5</number>
+      </property>
+      <property name="bottomMargin">
+       <number>10</number>
+      </property>
+      <item>
+       <layout class="QFormLayout" name="formLayout">
+        <property name="verticalSpacing">
+         <number>8</number>
+        </property>
+        <item row="0" column="0">
+         <widget class="QLabel" name="label">
+          <property name="text">
+           <string>Com</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QComboBox" name="ComComboBox" />
+        </item>
+        <item row="1" column="0">
+         <widget class="QLabel" name="label_3">
+          <property name="text">
+           <string>BaudR</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="0">
+         <widget class="QLabel" name="label_6">
+          <property name="text">
+           <string>TimeOut</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="0">
+         <widget class="QLabel" name="label_4">
+          <property name="text">
+           <string>DParity</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="QComboBox" name="BaudComboBox" />
+        </item>
+        <item row="2" column="1">
+         <widget class="QComboBox" name="ParityComboBox" />
+        </item>
+        <item row="3" column="1">
+         <widget class="QLineEdit" name="timeoutLineEdit">
+          <property name="text">
+           <string>50</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_6">
+        <item>
+         <spacer name="horizontalSpacer">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item>
+         <widget class="QPushButton" name="ComOpenButton">
+          <property name="text">
+           <string>Open</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item><item><widget class="QGroupBox" name="ServoListGroup">
+    <property name="maximumSize"><size><width>245</width><height>16777215</height></size></property><property name="sizePolicy"><sizepolicy hsizetype="Preferred" vsizetype="Expanding"><horstretch>0</horstretch><verstretch>1</verstretch></sizepolicy></property><property name="minimumSize"><size><width>190</width><height>240</height></size></property><property name="title">
+     <string>Servo List</string>
+    </property>
+    <layout class="QVBoxLayout" name="verticalLayout_4">
+      <item><widget class="QPushButton" name="SearchButton">
+          <property name="text">
+           <string>Search</string>
+          </property>
+         </widget>
+        </item><property name="spacing">
+       <number>8</number>
+      </property>
+      <property name="leftMargin">
+       <number>5</number>
+      </property>
+      <property name="topMargin">
+       <number>10</number>
+      </property>
+      <property name="rightMargin">
+       <number>5</number>
+      </property>
+      <property name="bottomMargin">
+       <number>10</number>
+      </property>
+      <item>
+       <widget class="QLineEdit" name="ServoSearchText">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="inputMask">
+         <string />
+        </property>
+        <property name="frame">
+         <bool>true</bool>
+        </property>
+        <property name="echoMode">
+         <enum>QLineEdit::Normal</enum>
+        </property>
+        <property name="readOnly">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QTableView" name="ServoListView">
+        <property name="enabled">
+         <bool>true</bool>
+        </property>
+        <attribute name="horizontalHeaderCascadingSectionResizes">
+         <bool>false</bool>
+        </attribute>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="torqueAllButton">
+        <property name="toolTip">
+         <string>Toggle Torque Enable on every servo found by Search</string>
+        </property>
+        <property name="text">
+         <string>Torque Off (All)</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+  </item></layout></item><item><widget class="QTabWidget" name="tabWidget">
+    <property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Expanding"><horstretch>1</horstretch><verstretch>1</verstretch></sizepolicy></property><property name="enabled">
+     <bool>true</bool>
+    </property>
+    <property name="tabShape">
+     <enum>QTabWidget::Rounded</enum>
+    </property>
+    <property name="currentIndex">
+     <number>0</number>
+    </property>
+    <widget class="QWidget" name="DebugTab">
+     <attribute name="title">
+      <string>Debug</string>
+     </attribute>
+     <layout class="QVBoxLayout" name="debugTabLayout"><property name="spacing"><number>10</number></property><property name="leftMargin"><number>10</number></property><property name="topMargin"><number>10</number></property><property name="rightMargin"><number>10</number></property><property name="bottomMargin"><number>10</number></property><item><layout class="QHBoxLayout" name="graphRowLayout"><property name="spacing"><number>10</number></property><item><widget class="GraphWidget" name="graphWidget" native="true">
+      <property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Expanding"><horstretch>1</horstretch><verstretch>1</verstretch></sizepolicy></property><property name="minimumSize"><size><width>380</width><height>170</height></size></property></widget>
+     </item><item><layout class="QVBoxLayout" name="verticalLayout_2">
+       <property name="spacing">
+        <number>2</number>
+       </property>
+       <item>
+        <widget class="QCheckBox" name="posCheckBox">
+         <property name="text">
+          <string>Position</string>
+         </property>
+         <property name="checked">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="goalCheckBox">
+         <property name="text">
+          <string>Goal</string>
+         </property>
+         <property name="checked">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="torqueCheckBox">
+         <property name="text">
+          <string>Torque</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="speedCheckBox">
+         <property name="text">
+          <string>Speed</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="currentCheckBox">
+         <property name="text">
+          <string>Current</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="tempCheckBox">
+         <property name="text">
+          <string>Temperature</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="voltageCheckBox">
+         <property name="text">
+          <string>Voltage</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="zoomLimitsSpacer">
+         <property name="orientation"><enum>Qt::Vertical</enum></property>
+         <property name="sizeType"><enum>QSizePolicy::Fixed</enum></property>
+         <property name="sizeHint" stdset="0"><size><width>0</width><height>14</height></size></property>
+        </spacer>
+       </item>
+       <item>
+        <layout class="QFormLayout" name="formLayout_2">
+         <item row="0" column="0">
+          <widget class="QLabel" name="label_8">
+           <property name="text">
+            <string>Up</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QLineEdit" name="upLimitLineEdit">
+           <property name="maximumSize"><size><width>72</width><height>16777215</height></size></property><property name="enabled">
+            <bool>true</bool>
+           </property>
+           <property name="text">
+            <string>0</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="label_9">
+           <property name="text">
+            <string>Down</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QLineEdit" name="downLimitLineEdit">
+           <property name="maximumSize"><size><width>72</width><height>16777215</height></size></property><property name="enabled">
+            <bool>true</bool>
+           </property>
+           <property name="text">
+            <string>0</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+      </layout>
+     </item></layout></item><item><layout class="QGridLayout" name="debugPanelsLayout"><property name="spacing"><number>10</number></property><item row="0" column="0"><widget class="QGroupBox" name="groupBox_3">
+      <property name="sizePolicy"><sizepolicy hsizetype="Preferred" vsizetype="Fixed"><horstretch>0</horstretch><verstretch>0</verstretch></sizepolicy></property><property name="enabled">
+       <bool>true</bool>
+      </property>
+      <property name="title">
+       <string>Servo Control</string>
+      </property>
+      <layout class="QVBoxLayout" name="verticalLayout_3">
+        <property name="leftMargin">
+         <number>10</number>
+        </property>
+        <property name="topMargin">
+         <number>5</number>
+        </property>
+        <property name="rightMargin">
+         <number>10</number>
+        </property>
+        <property name="bottomMargin">
+         <number>5</number>
+        </property>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_10">
+          <item>
+           <widget class="QRadioButton" name="writeRadioButton">
+            <property name="text">
+             <string>Write</string>
+            </property>
+            <property name="checked">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QRadioButton" name="syncWriteRadioButton">
+            <property name="enabled">
+             <bool>true</bool>
+            </property>
+            <property name="text">
+             <string>Sync Write</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QRadioButton" name="regWriteRadioButton">
+            <property name="enabled">
+             <bool>true</bool>
+            </property>
+            <property name="text">
+             <string>Reg Write</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="torqueEnableCheckBox">
+            <property name="text">
+             <string>Torque Enable</string>
+            </property>
+            <property name="checked">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QSlider" name="goalSlider">
+          <property name="maximum">
+           <number>4095</number>
+          </property>
+          <property name="value">
+           <number>2048</number>
+          </property>
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QGridLayout" name="gridLayout">
+          <property name="leftMargin">
+           <number>17</number>
+          </property>
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <property name="rightMargin">
+           <number>13</number>
+          </property>
+          <property name="bottomMargin">
+           <number>0</number>
+          </property>
+          <property name="horizontalSpacing">
+           <number>20</number>
+          </property>
+          <property name="verticalSpacing">
+           <number>10</number>
+          </property>
+          <item row="0" column="1">
+           <widget class="QLineEdit" name="accLineEdit">
+            <property name="text">
+             <string>0</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="3">
+           <widget class="QLineEdit" name="timeLineEdit">
+            <property name="text">
+             <string>0</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="2">
+           <widget class="QLabel" name="label_16">
+            <property name="text">
+             <string>Time</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="label_14">
+            <property name="text">
+             <string>Speed</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="2">
+           <widget class="QLabel" name="label_13">
+            <property name="text">
+             <string>Goal</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="3">
+           <widget class="QLineEdit" name="goalLineEdit">
+            <property name="text">
+             <string>2048</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="0">
+           <widget class="QLabel" name="label_15">
+            <property name="text">
+             <string>Acc</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QLineEdit" name="speedLineEdit">
+            <property name="text">
+             <string>0</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="4">
+           <widget class="QPushButton" name="actionPushButton">
+            <property name="enabled">
+             <bool>false</bool>
+            </property>
+            <property name="text">
+             <string>Action</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="4">
+           <widget class="QPushButton" name="setPushButton">
+            <property name="text">
+             <string>Set</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="QLabel" name="label_angle_in">
+            <property name="text">
+             <string>Angle</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QLineEdit" name="angleLineEdit">
+            <property name="toolTip">
+             <string>Joint angle relative to the calibrated midpoint (0 = midpoint)</string>
+            </property>
+            <property name="text">
+             <string>0.0</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="2">
+           <widget class="QComboBox" name="angleUnitComboBox">
+            <property name="minimumSize"><size><width>76</width><height>0</height></size></property><item>
+             <property name="text">
+              <string>deg</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>rad</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+          <item row="2" column="3">
+           <widget class="QLabel" name="angleCountLabel">
+            <property name="text">
+             <string>= 2048</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="4">
+           <widget class="QPushButton" name="angleSetButton">
+            <property name="toolTip">
+             <string>Convert the angle to an encoder count and send it as a Goal Position</string>
+            </property>
+            <property name="text">
+             <string>Set Angle</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </widget>
+     </item><item row="0" column="1"><widget class="QGroupBox" name="groupBox_5">
+      <property name="sizePolicy"><sizepolicy hsizetype="Preferred" vsizetype="Fixed"><horstretch>0</horstretch><verstretch>0</verstretch></sizepolicy></property><property name="title">
+       <string>Servo Feedback</string>
+      </property>
+      <layout class="QGridLayout" name="gridLayout_3">
+        <property name="horizontalSpacing"><number>8</number></property><property name="verticalSpacing"><number>7</number></property><property name="leftMargin">
+         <number>10</number>
+        </property>
+        <property name="topMargin">
+         <number>5</number>
+        </property>
+        <property name="rightMargin">
+         <number>10</number>
+        </property>
+        <property name="bottomMargin">
+         <number>5</number>
+        </property>
+        <item row="4" column="1">
+         <widget class="QLabel" name="label_25">
+          <property name="text">
+           <string>-</string>
+          </property>
+         <property name="alignment"><set>Qt::AlignLeft|Qt::AlignVCenter</set></property></widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="QLabel" name="currentLabel">
+          <property name="text">
+           <string>0</string>
+          </property>
+         <property name="alignment"><set>Qt::AlignLeft|Qt::AlignVCenter</set></property></widget>
+        </item>
+        <item row="2" column="1">
+         <widget class="QLabel" name="temperatureLabel">
+          <property name="text">
+           <string>0</string>
+          </property>
+         <property name="alignment"><set>Qt::AlignLeft|Qt::AlignVCenter</set></property></widget>
+        </item>
+        <item row="0" column="3">
+         <widget class="QLabel" name="torqueLabel">
+          <property name="text">
+           <string>0</string>
+          </property>
+         <property name="alignment"><set>Qt::AlignLeft|Qt::AlignVCenter</set></property></widget>
+        </item>
+        <item row="1" column="0">
+         <widget class="QLabel" name="label_23">
+          <property name="text">
+           <string>Current:</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QLabel" name="voltageLabel">
+          <property name="text">
+           <string>0.0V</string>
+          </property>
+         <property name="alignment"><set>Qt::AlignLeft|Qt::AlignVCenter</set></property></widget>
+        </item>
+        <item row="0" column="0">
+         <widget class="QLabel" name="label_10">
+          <property name="text">
+           <string>Voltage:</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="3">
+         <widget class="QLabel" name="positionLabel">
+          <property name="text">
+           <string>0</string>
+          </property>
+         <property name="alignment"><set>Qt::AlignLeft|Qt::AlignVCenter</set></property></widget>
+        </item>
+        <item row="4" column="0">
+         <widget class="QLabel" name="label_11">
+          <property name="text">
+           <string>State:</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="3">
+         <widget class="QLabel" name="goalLabel">
+          <property name="text">
+           <string>0</string>
+          </property>
+         <property name="alignment"><set>Qt::AlignLeft|Qt::AlignVCenter</set></property></widget>
+        </item>
+        <item row="2" column="0">
+         <widget class="QLabel" name="label_24">
+          <property name="text">
+           <string>Temperature:</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="0">
+         <widget class="QLabel" name="label_22">
+          <property name="text">
+           <string>Moving:</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="3">
+         <widget class="QLabel" name="speedLabel">
+          <property name="text">
+           <string>0</string>
+          </property>
+         <property name="alignment"><set>Qt::AlignLeft|Qt::AlignVCenter</set></property></widget>
+        </item>
+        <item row="3" column="1">
+         <widget class="QLabel" name="movingLabel">
+          <property name="text">
+           <string>0</string>
+          </property>
+         <property name="alignment"><set>Qt::AlignLeft|Qt::AlignVCenter</set></property></widget>
+        </item>
+        <item row="0" column="2">
+         <widget class="QLabel" name="label_26">
+          <property name="text">
+           <string>Torque:</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="2">
+         <widget class="QLabel" name="label_34">
+          <property name="text">
+           <string>Speed:</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="2">
+         <widget class="QLabel" name="label_35">
+          <property name="text">
+           <string>Position:</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="2">
+         <widget class="QLabel" name="label_36">
+          <property name="text">
+           <string>Goal:</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+          </property>
+         </widget>
+        </item>
+        <item row="5" column="0">
+         <widget class="QLabel" name="label_angle">
+          <property name="text">
+           <string>Angle:</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+          </property>
+         </widget>
+        </item>
+        <item row="5" column="1" colspan="3"><layout class="QHBoxLayout" name="angleValueLayout"><property name="spacing"><number>14</number></property><item><widget class="QLabel" name="angleRadLabel">
+          <property name="text">
+           <string>0.000 rad</string>
+          </property>
+         <property name="alignment"><set>Qt::AlignLeft|Qt::AlignVCenter</set></property></widget>
+        </item><item><widget class="QLabel" name="angleDegLabel">
+          <property name="text">
+           <string>0.0°</string>
+          </property>
+         <property name="alignment"><set>Qt::AlignLeft|Qt::AlignVCenter</set></property></widget>
+        </item><item><spacer name="angleValueSpacer"><property name="orientation"><enum>Qt::Horizontal</enum></property><property name="sizeHint" stdset="0"><size><width>0</width><height>0</height></size></property></spacer></item></layout></item></layout>
+      </widget>
+     </item><item row="1" column="0"><widget class="QGroupBox" name="groupBox_4">
+      <property name="sizePolicy"><sizepolicy hsizetype="Preferred" vsizetype="Preferred"><horstretch>0</horstretch><verstretch>0</verstretch></sizepolicy></property><property name="enabled">
+       <bool>true</bool>
+      </property>
+      <property name="title">
+       <string>Auto debug</string>
+      </property>
+      <layout class="QGridLayout" name="gridLayout_2">
+        <property name="leftMargin"><number>10</number></property>
+        <property name="topMargin"><number>5</number></property>
+        <property name="rightMargin"><number>10</number></property>
+        <property name="bottomMargin"><number>5</number></property>
+        <property name="horizontalSpacing"><number>8</number></property>
+        <property name="verticalSpacing"><number>8</number></property>
+
+        <item row="0" column="0">
+         <widget class="QLabel" name="label_20"><property name="text"><string>Start</string></property></widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QLineEdit" name="startLineEdit">
+          <property name="text"><string>0</string></property>
+          <property name="toolTip"><string>One end of the travel, in encoder counts. Both modes move between Start and End.</string></property>
+         </widget>
+        </item>
+        <item row="0" column="2">
+         <widget class="QLabel" name="label_18"><property name="text"><string>End</string></property></widget>
+        </item>
+        <item row="0" column="3">
+         <widget class="QLineEdit" name="endLineEdit">
+          <property name="text"><string>4095</string></property>
+          <property name="toolTip"><string>The other end of the travel, in encoder counts.</string></property>
+         </widget>
+        </item>
+        <item row="0" column="4">
+         <spacer name="autoDebugSpacer">
+          <property name="orientation"><enum>Qt::Horizontal</enum></property>
+          <property name="sizeHint" stdset="0"><size><width>1</width><height>1</height></size></property>
+         </spacer>
+        </item>
+
+        <item row="1" column="0">
+         <widget class="QLabel" name="label_19"><property name="text"><string>Hold each end (ms)</string></property></widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="QLineEdit" name="sweepLineEdit">
+          <property name="text"><string>2500</string></property>
+          <property name="toolTip"><string>How long to wait at one end before jumping to the other.</string></property>
+         </widget>
+        </item>
+        <item row="1" column="5">
+         <widget class="QPushButton" name="sweepButton">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="text"><string>Sweep</string></property>
+          <property name="toolTip"><string>Command the whole move at once: jump to Start, wait, jump to End, wait, repeat. Use it to watch how the servo settles after a large step.</string></property>
+         </widget>
+        </item>
+
+        <item row="2" column="0">
+         <widget class="QLabel" name="label_stepSize"><property name="text"><string>Step size (counts)</string></property></widget>
+        </item>
+        <item row="2" column="1">
+         <widget class="QLineEdit" name="stepSizeLineEdit">
+          <property name="text"><string>10</string></property>
+          <property name="toolTip"><string>How far the goal moves on each tick, in encoder counts.</string></property>
+         </widget>
+        </item>
+        <item row="2" column="2">
+         <widget class="QLabel" name="label_17"><property name="text"><string>Step every (ms)</string></property></widget>
+        </item>
+        <item row="2" column="3">
+         <widget class="QLineEdit" name="stepDelayLineEdit">
+          <property name="text"><string>10</string></property>
+          <property name="toolTip"><string>How long to wait between one step and the next.</string></property>
+         </widget>
+        </item>
+        <item row="2" column="5">
+         <widget class="QPushButton" name="stepButton">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="text"><string>Step</string></property>
+          <property name="toolTip"><string>Creep across the range: move the goal by the step size every interval, reversing at each end. Use it to drive the joint slowly through its travel.</string></property>
+         </widget>
+        </item>
+
+        <item row="3" column="0" colspan="6">
+         <widget class="QLabel" name="autoDebugHintLabel">
+          <property name="text"><string>Sweep jumps between the two ends; Step creeps across in increments. Hover a button for detail.</string></property>
+          <property name="wordWrap"><bool>true</bool></property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item><item row="1" column="1"><widget class="QGroupBox" name="groupBox_6">
+      <property name="sizePolicy"><sizepolicy hsizetype="Preferred" vsizetype="Fixed"><horstretch>0</horstretch><verstretch>0</verstretch></sizepolicy></property><property name="enabled">
+       <bool>true</bool>
+      </property>
+      <property name="title">
+       <string>Data analysis</string>
+      </property>
+      <layout class="QGridLayout" name="gridLayout_4">
+        <property name="leftMargin">
+         <number>10</number>
+        </property>
+        <property name="topMargin">
+         <number>5</number>
+        </property>
+        <property name="rightMargin">
+         <number>10</number>
+        </property>
+        <property name="bottomMargin">
+         <number>5</number>
+        </property>
+        <property name="horizontalSpacing">
+         <number>8</number>
+        </property>
+        <property name="verticalSpacing">
+         <number>10</number>
+        </property>
+        <item row="0" column="0">
+         <widget class="QLabel" name="label_40">
+          <property name="text">
+           <string>time(s)</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="3">
+         <widget class="QPushButton" name="clearPushButton">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="text">
+           <string>Empty</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0">
+         <widget class="QLabel" name="label_37">
+          <property name="text">
+           <string>file:rows</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QLineEdit" name="recTimeLineEdit">
+          <property name="text">
+           <string>30</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="QLineEdit" name="recFileNameLineEdit">
+          <property name="minimumSize"><size><width>132</width><height>0</height></size></property><property name="text">
+           <string>~/record.txt</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="3">
+         <widget class="QPushButton" name="exportPushButton">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="text">
+           <string>Export</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="2">
+         <widget class="QLineEdit" name="recSizeLineEdit">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>90</width>
+            <height>16777215</height>
+           </size>
+          </property>
+          <property name="text">
+           <string>0</string>
+          </property>
+          <property name="readOnly">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item></layout></item></layout></widget>
+    <widget class="QWidget" name="ProgrammingTab">
+     <attribute name="title">
+      <string>Programming</string>
+     </attribute>
+     <layout class="QVBoxLayout" name="progTabLayout"><property name="spacing"><number>10</number></property><property name="leftMargin"><number>10</number></property><property name="topMargin"><number>10</number></property><property name="rightMargin"><number>10</number></property><property name="bottomMargin"><number>10</number></property><item><layout class="QHBoxLayout" name="progTopRowLayout"><property name="spacing"><number>8</number></property><item><layout class="QHBoxLayout" name="horizontalLayout">
+       <item>
+        <widget class="QPushButton" name="memSaveButton">
+         <property name="text">
+          <string>Save</string>
+         </property>
+        <property name="toolTip"><string>Read every register from the selected servo and write them to a JSON file</string></property></widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="memLoadButton">
+         <property name="text">
+          <string>Load</string>
+         </property>
+        <property name="toolTip"><string>Restore writable registers to the selected servo from a JSON file</string></property></widget>
+       </item>
+       </layout>
+     </item><item><spacer name="progTopSpacer"><property name="orientation"><enum>Qt::Horizontal</enum></property><property name="sizeHint" stdset="0"><size><width>20</width><height>20</height></size></property></spacer></item></layout></item><item><layout class="QHBoxLayout" name="progBodyLayout"><property name="spacing"><number>10</number></property><item><widget class="QTableView" name="memoryTableView">
+      <property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Expanding"><horstretch>1</horstretch><verstretch>1</verstretch></sizepolicy></property><property name="minimumSize"><size><width>380</width><height>200</height></size></property></widget>
+     </item><item><layout class="QVBoxLayout" name="progRightLayout"><property name="spacing"><number>10</number></property><item><widget class="QPlainTextEdit" name="plainTextEdit">
+      <property name="minimumSize"><size><width>200</width><height>110</height></size></property><property name="sizePolicy"><sizepolicy hsizetype="Preferred" vsizetype="Fixed"><horstretch>0</horstretch><verstretch>0</verstretch></sizepolicy></property><property name="readOnly">
+       <bool>true</bool>
+      </property>
+      <property name="plainText">
+       <string>Normal
+</string>
+      </property>
+     </widget>
+     </item><item><widget class="QGroupBox" name="calibrationGroup">
+      <property name="title">
+       <string>Calibration</string>
+      </property>
+      <layout class="QVBoxLayout" name="calibrationGroupLayout"><property name="spacing"><number>8</number></property><property name="leftMargin"><number>10</number></property><property name="topMargin"><number>8</number></property><property name="rightMargin"><number>10</number></property><property name="bottomMargin"><number>10</number></property><item><widget class="QPushButton" name="calibrationMidButton">
+       <property name="toolTip">
+        <string>Store the servo's current position as the midpoint (2048) by writing Position Offset Value to EPROM</string>
+       </property>
+       <property name="text">
+        <string>Set Midpoint</string>
+       </property>
+      </widget>
+      </item><item><widget class="QLabel" name="progStatusLabel">
+       <property name="text">
+        <string>-</string>
+       </property>
+       <property name="wordWrap">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item></layout></widget>
+    </item><item><spacer name="progRightSpacer"><property name="orientation"><enum>Qt::Vertical</enum></property><property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property></spacer></item><item><widget class="QLabel" name="memLabel">
+      <property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Fixed"><horstretch>1</horstretch><verstretch>0</verstretch></sizepolicy></property><property name="text">
+       <string>-</string>
+      </property>
+     </widget>
+     </item><item><layout class="QHBoxLayout" name="horizontalLayout_2">
+       <item>
+        <widget class="QLineEdit" name="memSetLineEdit">
+         <property name="text">
+          <string>1</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="memSetButton">
+         <property name="text">
+          <string>Set</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </item></layout></item></layout></item></layout></widget>
+    <widget class="QWidget" name="CalibrationTab">
+     <attribute name="title">
+      <string>Calibration</string>
+     </attribute>
+     <layout class="QVBoxLayout" name="calibTabLayout"><property name="spacing"><number>10</number></property><property name="leftMargin"><number>12</number></property><property name="topMargin"><number>12</number></property><property name="rightMargin"><number>12</number></property><property name="bottomMargin"><number>12</number></property><item><widget class="QGroupBox" name="calibGateGroup">
+      <property name="sizePolicy"><sizepolicy hsizetype="Preferred" vsizetype="Fixed"><horstretch>0</horstretch><verstretch>0</verstretch></sizepolicy></property><property name="title">
+       <string>Prerequisite: torque disabled on all detected servos</string>
+      </property>
+      <layout class="QHBoxLayout" name="calibGateLayout"><property name="spacing"><number>12</number></property><property name="leftMargin"><number>12</number></property><property name="topMargin"><number>8</number></property><property name="rightMargin"><number>12</number></property><property name="bottomMargin"><number>10</number></property><item><widget class="QLabel" name="calibStatusLabel">
+       <property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Preferred"><horstretch>1</horstretch><verstretch>0</verstretch></sizepolicy></property><property name="text">
+        <string>Serial port is not open.</string>
+       </property>
+       <property name="wordWrap">
+        <bool>true</bool>
+       </property>
+      </widget>
+      </item><item><widget class="QPushButton" name="calibRecheckButton">
+       <property name="sizePolicy"><sizepolicy hsizetype="Fixed" vsizetype="Fixed"><horstretch>0</horstretch><verstretch>0</verstretch></sizepolicy></property><property name="text">
+        <string>Recheck Torque</string>
+       </property>
+      </widget>
+     </item></layout></widget>
+     </item><item><layout class="QHBoxLayout" name="calibNamesRowLayout"><property name="spacing"><number>8</number></property><item><widget class="QLabel" name="calibNamesLabel">
+      <property name="text">
+       <string>Joint names</string>
+      </property>
+     </widget>
+     </item><item><widget class="QLineEdit" name="calibNamesLineEdit">
+      <property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Fixed"><horstretch>1</horstretch><verstretch>0</verstretch></sizepolicy></property><property name="toolTip">
+       <string>Comma separated joint names, in ascending servo ID order</string>
+      </property>
+     </widget>
+     </item><item><widget class="QPushButton" name="calibApplyNamesButton">
+      <property name="sizePolicy"><sizepolicy hsizetype="Fixed" vsizetype="Fixed"><horstretch>0</horstretch><verstretch>0</verstretch></sizepolicy></property><property name="text">
+       <string>Apply Names</string>
+      </property>
+     </widget>
+     </item></layout></item><item><widget class="QTableView" name="calibTableView">
+      <property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Expanding"><horstretch>1</horstretch><verstretch>1</verstretch></sizepolicy></property><property name="minimumSize"><size><width>520</width><height>180</height></size></property></widget>
+     </item><item><layout class="QHBoxLayout" name="calibButtonRowLayout"><property name="spacing"><number>8</number></property><item><widget class="QPushButton" name="calibHomeButton">
+      <property name="toolTip">
+       <string>Zero the offset, reset position limits, then store the current pose as the midpoint</string>
+      </property>
+      <property name="text">
+       <string>1. Set Home (middle pose)</string>
+      </property>
+     </widget>
+     </item><item><widget class="QPushButton" name="calibRecordButton">
+      <property name="toolTip">
+       <string>Track min and max position while you move every joint through its range</string>
+      </property>
+      <property name="text">
+       <string>2. Start Recording Range</string>
+      </property>
+     </widget>
+     </item><item><widget class="QPushButton" name="calibExportButton">
+      <property name="text">
+       <string>3. Export JSON...</string>
+      </property>
+     </widget>
+     </item><item><spacer name="calibButtonSpacer"><property name="orientation"><enum>Qt::Horizontal</enum></property><property name="sizeHint" stdset="0"><size><width>20</width><height>20</height></size></property></spacer></item></layout></item><item><widget class="QLabel" name="calibHintLabel">
+      <property name="sizePolicy"><sizepolicy hsizetype="Preferred" vsizetype="Fixed"><horstretch>0</horstretch><verstretch>0</verstretch></sizepolicy></property><property name="text">
+       <string>One row per detected servo, in ascending servo ID order. Paste the joint names in that same order, comma separated, then press Apply Names.
+
+1. Hold the arm at its middle pose, then Set Home. Writes Position Offset Value so that pose reads mid scale, and resets position limits to full range.
+2. Start Recording, move every joint slowly through its full range, then Stop.
+3. Export JSON. For a continuous-rotation joint, type the full range by hand (0 and 4095 on a 12 bit servo).</string>
+      </property>
+      <property name="wordWrap">
+       <bool>true</bool>
+      </property>
+     </widget>
+    </item></layout></widget>
+   </widget>
+   </item></layout></widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>917</width>
+     <height>23</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QStatusBar" name="statusbar" />
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>GraphWidget</class>
+   <extends>QWidget</extends>
+   <header>graphwidget.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
+ <resources />
+ <connections />
+</ui>

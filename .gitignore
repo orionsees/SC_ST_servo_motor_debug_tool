@@ -1,0 +1,19 @@
+.vscode/
+*.user
+*.deb
+
+Makefile
+.qmake.stash
+*.o
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+build/
+build-nosudo/
+
+# Ignore the binary built in the source tree, but the prebuilt one shipped for
+# Ubuntu users is committed on purpose. Without the negation the bare pattern
+# above would match at any depth and silently drop it.
+servobench
+!packaging/servobench
