@@ -146,3 +146,7 @@ magnetic encoder, so a whole arm needs a single cable.
 
 The calibration export here writes LeRobot's `calibration.json` format, so
 ServoBench can be used to calibrate an SO-101 or LeKiwi directly.
+
+## Contributing
+
+Issues and pull requests are welcome <3
