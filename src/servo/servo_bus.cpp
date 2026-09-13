@@ -254,6 +254,15 @@ void ServoBus::regWriteAction(uint8_t id)
     scserial_->reg_write_action(id);
 }
 
+void ServoBus::flushWrites()
+{
+    assertOnBusThread();
+    if(serial_->isOpen())
+    {
+        serial_->waitForBytesWritten(200);
+    }
+}
+
 void ServoBus::enableTorque(uint8_t id, ModelSeries series, bool on)
 {
     assertOnBusThread();

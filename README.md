@@ -91,15 +91,107 @@ Windows 11, otherwise from WCH.
 - **Calibration** — gated on torque being released. Sets midpoint, records range
   of motion, exports `calibration.json`.
 - Servo faults (register 65) are decoded and shown per servo in the servo list.
+- **Terminal version** — `servobench-cli`, the same three tabs in a full-screen
+  terminal tool, plus one-shot commands for scripts. See below.
+
+
+## Terminal version
+
+`servobench-cli` is the same tool without the window. It does everything the
+GUI does -- live telemetry and plot, joint control, the register map, and the
+calibration export -- over the same `src/servo` protocol code, so both send the
+identical bytes to a servo.
+
+It has two modes. With no command it starts a full-screen tool with the same
+three tabs; with a command it does one thing and exits, which is what makes it
+usable from a script or over SSH.
+
+### Build
+
+```bash
+mkdir -p build-cli && cd build-cli
+qmake ../ServoBenchCli.pro && make -j"$(nproc)"
+./servobench-cli
+```
+
+Same dependencies as the GUI minus the widgets: Qt 5.14+ with SerialPort. On
+Ubuntu, `sudo apt install -y qtbase5-dev libqt5serialport5-dev g++ make`.
+
+### Full-screen tool
+
+```bash
+servobench-cli                 # first USB serial port found
+servobench-cli -p ttyUSB0 -b 1000000
+servobench-cli --ascii --plain # no braille, no colour, for a bare terminal
+```
+
+`o` opens the port, `s` searches the bus, `n` and `N` pick a servo, `t`
+releases or engages torque everywhere, Tab moves between Debug, Programming and
+Calibration, and `?` lists every key. The plot is braille, zooms with `+`/`-`
+and `<`/`>`, pans with `h`/`l`, resets with `0`, and follows the mouse wheel and
+drag where the terminal reports them (`z` turns mouse reporting off so the
+terminal can select text again).
+
+The dangerous operations ask the same three times as the window does, and
+calibration is gated on torque being released on every detected servo.
+
+### Commands
+
+```bash
+servobench-cli ports                      # serial ports, USB ones first
+servobench-cli scan                       # ping the bus, list what answers
+servobench-cli info 1                     # model, firmware, limits, faults
+servobench-cli monitor 1 --hz 50 --csv    # telemetry to stdout
+servobench-cli record 1 --file run.txt    # the GUI's CSV log format
+
+servobench-cli read 1 "Position P Gain"   # by name, address, or prefix
+servobench-cli write 1 21 24              # EPROM-aware, verified by read-back
+servobench-cli dump 1                     # the whole register map
+servobench-cli regs save 1 servo1.json    # snapshot, same JSON as the GUI
+servobench-cli regs load 1 servo1.json    # restore, three confirmations
+
+servobench-cli torque all off
+servobench-cli pos 1 3000 --speed 600 --wait
+servobench-cli angle 1 -45 --unit deg
+servobench-cli sweep 1 --start 1000 --end 3000 --hold 500
+```
+
+`--json` on the read-only commands prints machine-readable output; `--quiet` on
+`read` prints the bare value.
+
+Calibration is three steps in the window, so it is three commands here, sharing
+a state file (`~/.cache/servobench/calibration-state.json`, or `--state PATH`):
+
+```bash
+servobench-cli torque all off
+servobench-cli calib home                      # pose the arm first
+servobench-cli calib record                    # move every joint, Ctrl-C to stop
+servobench-cli calib names shoulder_pan,shoulder_lift,elbow_flex
+servobench-cli calib export calibration.json
+```
+
+Anything that writes EPROM asks for confirmation; `--yes` answers in advance,
+which is the only way to run those from a script.
+
+`servobench-cli --help` lists everything, and `--help <command>` explains one.
 
 
 ## Code layout
 
 ```
-ServoBench.pro          qmake project
+ServoBench.pro          qmake project, the window
+ServoBenchCli.pro       qmake project, the terminal tool
 src/
   mainwindow.{h,cpp,ui} GUI: debug, programming, calibration tabs
   graphwidget.{h,cpp}   telemetry plot
+  cli/
+    main.cpp            argument parsing, then a command or the full-screen tool
+    commands.{h,cpp}    the one-shot commands
+    tui.{h,cpp}         full-screen tool: the same three tabs, from the keyboard
+    plot.{h,cpp}        the telemetry plot in braille
+    session.{h,cpp}     the bus, the servo table and the CSV recorder
+    term.{h,cpp}        raw mode, key and mouse decoding, screen diffing
+    calib_state.h       calibration state shared between the calib commands
   servo/
     scserial.{h,cpp}    serial protocol, model tables
     servo_bus.{h,cpp}   owns the port; every transaction on its own thread

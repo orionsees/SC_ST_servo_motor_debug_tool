@@ -102,6 +102,14 @@ public:
     void regWriteAction(uint8_t id);
     void enableTorque(uint8_t id, ModelSeries series, bool on);
 
+    // Pushes anything still sitting in the port's write buffer onto the wire.
+    // A command that expects a reply flushes on its own by waiting for one;
+    // the unacknowledged ones -- sync write, and Action addressed to the
+    // broadcast ID -- do not. Under an event loop that does not matter, since
+    // the loop drains the port, so this is only needed by a caller that is
+    // about to stop running one.
+    void flushWrites();
+
     ServoStatus readStatus(uint8_t id, ModelSeries series);
 
     // Reads a full telemetry sample and answers with statusReady. This is the
