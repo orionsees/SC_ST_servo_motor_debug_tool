@@ -25,7 +25,7 @@ distro with a different Qt — build from source below.
 Needs Qt 5.14+ (5.15 recommended) with the SerialPort module. Portable Qt, no
 platform-specific code.
 
-### Ubuntu 24.04
+### Ubuntu 22.04 / 24.04, Debian, Raspberry Pi OS, JetPack
 
 ```bash
 sudo apt install -y qtbase5-dev libqt5serialport5-dev qtchooser g++ make
@@ -33,6 +33,10 @@ qmake ServoBench.pro
 make -j"$(nproc)"
 ./servobench
 ```
+
+The same packages on the ARM boards. The window needs a desktop session
+though, so on a headless Raspberry Pi or Jetson build the terminal tool
+instead -- see [Terminal version](#terminal-version) below.
 
 Prefer building out of tree, a stray `ui_mainwindow.h` beside the sources
 shadows the generated one and breaks later builds confusingly:
@@ -108,14 +112,112 @@ usable from a script or over SSH.
 
 ### Build
 
+Qt 5 with the SerialPort module, and nothing else -- no widgets, no OpenGL, no
+X. So it builds and runs on a headless board over SSH, which is the point of
+having it on a robot at all. Qt 5.12 and newer; the Qt 5.14-only APIs are
+deliberately avoided so the older JetPack images still compile it. Verified
+here on Qt 5.15.13.
+
+The build is the same three commands everywhere; only the dependency install
+differs:
+
 ```bash
+sudo apt update
+sudo apt install qt6-base-dev qt6-base-dev-tools
 mkdir -p build-cli && cd build-cli
 qmake ../ServoBenchCli.pro && make -j"$(nproc)"
-./servobench-cli
+./servobench-cli --help
 ```
 
-Same dependencies as the GUI minus the widgets: Qt 5.14+ with SerialPort. On
-Ubuntu, `sudo apt install -y qtbase5-dev libqt5serialport5-dev g++ make`.
+Optionally put it on your PATH:
+
+```bash
+sudo install -m 755 servobench-cli /usr/local/bin/
+```
+
+The prebuilt `packaging/servobench` is an x86-64 **GUI** binary, so every ARM
+board below builds from source. Both tools can be built from the same checkout;
+they share `src/servo` and do not interfere.
+
+#### Ubuntu 22.04 / 24.04, Debian 11 / 12 (x86-64 or arm64)
+
+```bash
+sudo apt install -y qtbase5-dev libqt5serialport5-dev qtchooser g++ make
+sudo usermod -aG dialout $USER        # port access; log back in afterwards
+```
+
+#### Raspberry Pi 4 (Raspberry Pi OS bullseye or bookworm, 32- or 64-bit)
+
+Same packages as Debian above. On a 1 GB Pi use `make -j2` rather than
+`-j"$(nproc)"`; four parallel g++ processes on this codebase can run it out of
+memory.
+
+The Waveshare servo board is a CH340 USB adapter, so it appears as
+`/dev/ttyUSB0` -- `ch341` is in the stock Pi OS kernel, nothing to install. To
+drive the bus from the Pi's own 40-pin UART instead, run `sudo raspi-config`
+-> Interface Options -> Serial Port, answer **no** to the login shell and
+**yes** to the hardware port, reboot, and pass `-p serial0` -- `ports` lists
+USB adapters, so a name it does not print still opens fine.
+
+#### Jetson Orin Nano (JetPack 5 or 6)
+
+Same packages again. JetPack 6 is Ubuntu 22.04 with Qt 5.15, JetPack 5 is
+Ubuntu 20.04 with Qt 5.12; both build. Check which you have with:
+
+```bash
+qmake -query QT_VERSION
+```
+
+The CH340 board is `/dev/ttyUSB0` here too. If you wire the servo bus to the
+40-pin header UART instead, it is `/dev/ttyTHS1` (`ports --all` lists the
+non-USB ports), and the serial-console service holds the debug UART until you
+stop it:
+
+```bash
+sudo systemctl disable --now nvgetty
+```
+
+#### Other distributions
+
+```bash
+# Fedora
+sudo dnf install -y qt5-qtbase-devel qt5-qtserialport-devel gcc-c++ make
+# Arch
+sudo pacman -S --needed qt5-base qt5-serialport gcc make
+```
+
+The Qt 5 qmake is called `qmake-qt5` on some of these. Any Linux with Qt 5 and
+a serial port will do; there is no platform-specific code beyond the terminal
+handling.
+
+#### If qmake resolves oddly
+
+`qmake -query QT_VERSION` has to print a 5.x. Two things commonly get this
+wrong:
+
+- **Qt 6 is not supported.** Both tools use Qt 5 APIs (`QRegExp` among them).
+  Build with the Qt 5 qmake -- on Debian and Ubuntu that is
+  `/usr/lib/qt5/bin/qmake`.
+- **A conda environment on `PATH` shadows the system qmake.** Check
+  `which qmake`; use the full path above to be sure.
+
+#### Running it on a machine that does not build it
+
+The binary links the system Qt rather than bundling it, so a machine that only
+runs it needs the runtime packages, not the `-dev` ones:
+
+```bash
+sudo apt install -y libqt5core5a libqt5serialport5
+```
+
+It must also be the same architecture -- an arm64 build will not run on x86-64,
+or the other way round.
+
+#### Windows and macOS
+
+The full-screen tool uses POSIX terminal APIs (`termios`, `ioctl`), so it is
+Linux and macOS only. macOS should build with Qt 5 from Homebrew, though that
+is untested here. On Windows, use the GUI -- see the MSYS2 instructions above.
 
 ### Full-screen tool
 
