@@ -5,8 +5,34 @@
 namespace feetech_servo
 {
 
-ServoBus::ServoBus(QObject *parent)
+QElapsedTimer& busClock()
+{
+    static QElapsedTimer clock = []{
+        QElapsedTimer t;
+        t.start();
+        return t;
+    }();
+    return clock;
+}
+
+IServoBus::IServoBus(QObject *parent)
     : QObject(parent)
+{
+    // Start it here rather than at the first sample, so a timestamp always
+    // says how far into the run the sample was taken.
+    busClock();
+}
+
+IServoBus::~IServoBus() = default;
+
+bool IServoBus::connectTransport(const QString &, quint16, const QString &, QString *)
+{
+    // A serial bus is already where its servos are.
+    return true;
+}
+
+ServoBus::ServoBus(QObject *parent)
+    : IServoBus(parent)
 {
     qRegisterMetaType<feetech_servo::ServoStatus>();
 
@@ -288,6 +314,7 @@ ServoStatus ServoBus::readStatus(uint8_t id, ModelSeries series)
     // A servo that is not answering reads -1 everywhere; position is the one
     // the whole panel keys off, so treat it as the liveness check.
     status.ok = status.pos >= 0;
+    status.t_ms = busClock().elapsed();
     return status;
 }
 
@@ -300,6 +327,32 @@ void ServoBus::pollStatus(int id, int series)
         return;
     }
     emit statusReady(readStatus(static_cast<uint8_t>(id), static_cast<ModelSeries>(series)));
+}
+
+void ServoBus::startScan(int from, int to)
+{
+    assertOnBusThread();
+    scan_abort_.storeRelaxed(0);
+
+    bool completed = true;
+    for(int id = from; id <= to; id++)
+    {
+        if(scan_abort_.loadRelaxed() != 0)
+        {
+            completed = false;
+            break;
+        }
+
+        emit scanProgress(id);
+
+        const int found = ping(static_cast<uint8_t>(id));
+        if(found > 0)
+        {
+            emit scanFound(found, readModelNumber(static_cast<uint8_t>(found)));
+        }
+    }
+
+    emit scanFinished(completed);
 }
 
 }

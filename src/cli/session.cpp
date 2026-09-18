@@ -1,5 +1,7 @@
 #include "cli/session.h"
 
+#include "net/remote_bus.h"
+
 #include <QDir>
 #include <QSerialPortInfo>
 #include <QTextStream>
@@ -17,23 +19,7 @@ using feetech_servo::TORQUE_ENABLE_ADDRESS;
 
 QVector<PortInfo> availablePorts()
 {
-    QVector<PortInfo> with_vid;
-    QVector<PortInfo> all;
-
-    for(const QSerialPortInfo &info : QSerialPortInfo::availablePorts())
-    {
-        PortInfo entry;
-        entry.name = info.portName();
-        entry.description = info.description();
-        entry.manufacturer = info.manufacturer();
-        entry.has_vendor_id = info.hasVendorIdentifier();
-
-        all.append(entry);
-        if(entry.has_vendor_id)
-            with_vid.append(entry);
-    }
-
-    return with_vid.isEmpty() ? all : with_vid;
+    return feetech_servo::localPorts();
 }
 
 QStringList splitFields(const QString &text, const QRegExp &separator)
@@ -135,12 +121,14 @@ const MemoryConfig *findRegister(ModelSeries series, const QString &token, QStri
     return nullptr;
 }
 
-Session::Session(bool threaded, QObject *parent)
+Session::Session(bool threaded, bool remote, QObject *parent)
     : QObject(parent)
+    , remote_(remote)
 {
-    bus_ = new feetech_servo::ServoBus();
+    bus_ = remote ? static_cast<feetech_servo::IServoBus *>(new servobench_net::RemoteServoBus())
+                  : static_cast<feetech_servo::IServoBus *>(new feetech_servo::ServoBus());
 
-    connect(bus_, &feetech_servo::ServoBus::openedChanged, this,
+    connect(bus_, &feetech_servo::IServoBus::openedChanged, this,
             [this](bool is_open) { open_ = is_open; });
 
     if(threaded)
@@ -158,32 +146,87 @@ Session::~Session()
         // Close on the bus thread and wait for it: QSerialPort::close()
         // unregisters notifiers that belong to that thread, so it must not be
         // left to ~QSerialPort on this one.
-        QMetaObject::invokeMethod(bus_, [this] { bus_->close(); }, Qt::BlockingQueuedConnection);
+        QMetaObject::invokeMethod(bus_, [this] {
+            // A remote port belongs to the server, which keeps serving after
+            // this process exits. Closing it on the way out would leave the
+            // next client to find a bus that nobody asked to be shut.
+            if(!remote_)
+                bus_->close();
+            bus_->disconnectTransport();
+        }, Qt::BlockingQueuedConnection);
         bus_thread_->quit();
         bus_thread_->wait();
     }
-    else if(open_)
+    else
     {
-        bus_->close();
+        if(open_ && !remote_)
+            bus_->close();
+        bus_->disconnectTransport();
     }
 
     delete bus_;
 }
 
-bool Session::open(const ConnectionOptions &options, QString *error)
+QVector<PortInfo> Session::ports()
+{
+    if(!remote_)
+        return availablePorts();
+    return call([this] { return bus_->listPorts(); });
+}
+
+int Session::latencyMs() const
+{
+    return bus_->latencyMs();
+}
+
+bool Session::reach(const ConnectionOptions &options, QString *error)
 {
     options_ = options;
+    if(!remote_)
+        return true;
+
+    const ConnectionOptions o = options_;
+    QString reason;
+    const bool reached = call([this, o, &reason] {
+        return bus_->connectTransport(o.host, o.net_port, o.token, &reason);
+    });
+
+    if(!reached && error)
+        *error = reason;
+    return reached;
+}
+
+bool Session::open(const ConnectionOptions &options, QString *error)
+{
+    if(!reach(options, error))
+        return false;
+
+    if(remote_ && options_.port.isEmpty())
+    {
+        auto *remote = static_cast<servobench_net::RemoteServoBus *>(bus_);
+        if(remote->serverPortOpen() && !remote->serverDevice().isEmpty())
+        {
+            // The server is already holding the port it was started with.
+            // Reopening it would only close and reopen the same device, so
+            // take it as it stands.
+            options_.port = remote->serverDevice();
+            open_ = true;
+            return true;
+        }
+    }
 
     if(options_.port.isEmpty())
     {
-        const QVector<PortInfo> ports = availablePorts();
-        if(ports.isEmpty())
+        // Same rule as a local session: fall back to the first USB adapter --
+        // it is just that the list now comes from the machine holding it.
+        const QVector<PortInfo> found = ports();
+        if(found.isEmpty())
         {
             if(error)
-                *error = "No serial ports found.";
+                *error = remote_ ? "The server reports no serial ports." : "No serial ports found.";
             return false;
         }
-        options_.port = ports.first().name;
+        options_.port = found.first().name;
     }
 
     // A bare port name is what the GUI's dropdown carries; a full device path
@@ -199,7 +242,10 @@ bool Session::open(const ConnectionOptions &options, QString *error)
 
     if(!ok && error)
     {
-        *error = QString("Could not open %1. Check the device exists and that you are in "
+        *error = remote_
+               ? QString("The server could not open %1. Check the device exists there, and "
+                         "that the server's user is in the dialout group.").arg(options_.port)
+               : QString("Could not open %1. Check the device exists and that you are in "
                          "the dialout group.").arg(options_.port);
     }
     return ok;
@@ -301,15 +347,64 @@ ServoEntry Session::probe(int id)
 QVector<ServoEntry> Session::scan(int from, int to, const std::function<bool(int)> &progress)
 {
     QVector<ServoEntry> found;
-    for(int id = from; id <= to; id++)
-    {
-        if(progress && !progress(id))
-            break;
 
-        const ServoEntry entry = probe(id);
-        if(entry.id >= 0)
-            found.append(entry);
+    if(!remote_)
+    {
+        for(int id = from; id <= to; id++)
+        {
+            if(progress && !progress(id))
+                break;
+
+            const ServoEntry entry = probe(id);
+            if(entry.id >= 0)
+                found.append(entry);
+        }
+        return found;
     }
+
+    // Over a network, probing each address in turn would cost two round trips
+    // per ID -- more than five hundred of them for a full sweep. The bus runs
+    // the whole sweep on the machine holding the port instead, and reports
+    // what it finds as it goes.
+    QEventLoop loop;
+    QPointer<QEventLoop> loop_ptr(&loop);
+    bool aborted = false;
+
+    const auto on_progress = connect(bus_, &feetech_servo::IServoBus::scanProgress, this,
+                                     [&](int id) {
+        if(aborted || !progress || progress(id))
+            return;
+        aborted = true;
+        bus_->abortScan();
+    });
+
+    const auto on_found = connect(bus_, &feetech_servo::IServoBus::scanFound, this,
+                                  [&](int id, int model_number) {
+        ServoEntry entry;
+        entry.id = id;
+        entry.model = getModelType(model_number);
+        entry.series = getModelSeries(entry.model);
+        found.append(entry);
+    });
+
+    const auto on_finished = connect(bus_, &feetech_servo::IServoBus::scanFinished, this,
+                                     [loop_ptr](bool) {
+        if(loop_ptr)
+            loop_ptr->quit();
+    });
+
+    BusyMark mark(this);
+
+    // Queued rather than post(): post() would flush the bus afterwards, and on
+    // a remote bus that flush is itself a request whose reply loop would eat
+    // the scanFinished event before exec() is running to see it.
+    QMetaObject::invokeMethod(bus_, [this, from, to] { bus_->startScan(from, to); },
+                              Qt::QueuedConnection);
+    loop.exec();
+
+    disconnect(on_progress);
+    disconnect(on_found);
+    disconnect(on_finished);
     return found;
 }
 

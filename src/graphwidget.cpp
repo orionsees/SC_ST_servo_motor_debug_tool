@@ -508,7 +508,8 @@ void GraphWidget::reset_data()
     time_buf_.clear();
 }
 
-void GraphWidget::append_data(int pos, int goal, int torque, int speed, int current, int temp, int voltage)
+void GraphWidget::append_data(int pos, int goal, int torque, int speed, int current, int temp, int voltage,
+                              qint64 sample_ms)
 {
     pos_buf_.push(pos);
     goal_buf_.push(goal);
@@ -517,5 +518,5 @@ void GraphWidget::append_data(int pos, int goal, int torque, int speed, int curr
     current_buf_.push(current);
     temp_buf_.push(temp);
     voltage_buf_.push(voltage);
-    time_buf_.push(clock_.elapsed());
+    time_buf_.push(sample_ms >= 0 ? sample_ms : clock_.elapsed());
 }

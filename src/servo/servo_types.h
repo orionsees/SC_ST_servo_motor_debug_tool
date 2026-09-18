@@ -255,6 +255,23 @@ inline const MemoryConfig* findMemConfig(ModelSeries series, const QString &name
     return nullptr;
 }
 
+// The same lookup by register address. A networked bus sends a register as its
+// series and address rather than as a copy of its MemoryConfig, so the table
+// that decides sizes, sign-magnitude and EPROM locking is the one on the
+// machine holding the serial port -- a client built from another revision
+// cannot corrupt a write with a stale copy.
+inline const MemoryConfig* findMemConfigByAddress(ModelSeries series, uint8_t address)
+{
+    for(const auto &item : getMemConfig(series))
+    {
+        if(item.address == address)
+        {
+            return &item;
+        }
+    }
+    return nullptr;
+}
+
 // Servo Status (address 65) reports which protections have tripped. Unloading
 // Condition (19) and LED Alarm Condition (20) select which are enabled and
 // which flash the LED, and all three share this bit layout.

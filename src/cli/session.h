@@ -33,21 +33,21 @@ struct ConnectionOptions
     int baud = 1000000;
     QSerialPort::Parity parity = QSerialPort::NoParity;
     int timeout = 50;
+
+    // Set to drive a bus on another machine instead of a local serial port.
+    // The port, baud, parity and timeout above then describe the serial port
+    // on that machine, which is chosen and opened exactly as a local one is.
+    QString host;
+    quint16 net_port = 0;
+    QString token;
+
+    bool isRemote() const { return !host.isEmpty(); }
 };
 
-struct PortInfo
-{
-    QString name;
-    QString description;
-    QString manufacturer;
-    bool has_vendor_id = false;
-};
+using feetech_servo::PortInfo;
 
-// Every serial port worth offering, filtered the way the GUI's dropdown
-// filters: a USB adapter always carries a vendor identifier, which is what
-// separates the one real adapter from the kernel's 30-odd ttyS stubs. If
-// nothing has one -- a genuine motherboard COM port would not -- everything is
-// listed instead of an empty list.
+// Every serial port on this machine worth offering. For the ports on the far
+// end of a network link, ask the bus instead: IServoBus::listPorts.
 QVector<PortInfo> availablePorts();
 
 struct ServoEntry
@@ -95,10 +95,27 @@ class Session : public QObject
     Q_OBJECT
 
 public:
-    explicit Session(bool threaded, QObject *parent = nullptr);
+    // remote picks which bus is built: one on this machine's serial port, or
+    // one reached over TCP. It cannot be changed afterwards, so it is settled
+    // here rather than at open() -- by then the bus is already on its thread.
+    explicit Session(bool threaded, bool remote = false, QObject *parent = nullptr);
     ~Session() override;
 
+    // Reaches the machine holding the bus, without opening a serial port on it
+    // yet. A no-op on a local session, where the bus is already here. Needed on
+    // its own only by callers that want the port list before choosing one.
+    bool reach(const ConnectionOptions &options, QString *error);
+
+    // reach(), then open the serial port. Fills error and returns false at
+    // whichever step failed.
     bool open(const ConnectionOptions &options, QString *error);
+
+    // Serial ports on whichever machine holds the bus. Needs the transport to
+    // be up for a remote session, so it is only meaningful after open().
+    QVector<PortInfo> ports();
+
+    bool isRemote() const { return remote_; }
+    int latencyMs() const;
     void close();
     bool isOpen() const { return open_; }
     const ConnectionOptions &options() const { return options_; }
@@ -112,7 +129,7 @@ public:
     // The bus itself, for the few callers that want to post something it has
     // no wrapper for. Anything it is handed still has to run on the bus, so it
     // goes through call() or post() like everything else.
-    feetech_servo::ServoBus *bus() { return bus_; }
+    feetech_servo::IServoBus *bus() { return bus_; }
 
     // --- servo table ---
 
@@ -269,11 +286,12 @@ private:
         bool was_busy;
     };
 
-    feetech_servo::ServoBus *bus_;
+    feetech_servo::IServoBus *bus_;
     QThread *bus_thread_ = nullptr;
     ConnectionOptions options_;
     QVector<ServoEntry> servos_;
     bool open_ = false;
+    bool remote_ = false;
     bool busy_ = false;
     std::function<void(bool)> busy_hook_;
 };

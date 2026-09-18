@@ -13,6 +13,7 @@
 #include <QThread>
 #include "servo/scserial.h"
 #include "servo/servo_bus.h"
+#include "net/remote_bus.h"
 #include "calibration_json.h"
 #include "register_snapshot.h"
 #include "confirm_steps.h"
@@ -29,6 +30,11 @@ QT_END_NAMESPACE
 // How long each processEvents slice waits while draining a bus reply that
 // arrived after the event loop was already told to quit.
 constexpr int BUS_DRAIN_SLICE_MS = 5;
+
+// How often the COM dropdown is rebuilt from the far side of a network link.
+// Locally the list is free to read; over a link each refresh is a round trip,
+// and the set of ports on a robot does not change on a half-second timescale.
+constexpr int REMOTE_PORT_REFRESH_MS = 5000;
 
 class MainWindow : public QMainWindow
 {
@@ -49,6 +55,23 @@ private:
     void setupCalibration();
 
     void setEnableComSettings(bool state);
+
+    // Replaces the bus with one of the other kind. The thread is stopped for
+    // the swap, so nothing can be reading bus_ across it, and deleting the old
+    // bus drops the calls still queued for it.
+    void rebuildBus(bool remote);
+
+    // Reaches the machine holding the bus. A no-op on a local bus; on a remote
+    // one it connects and handshakes, and fills error if it could not.
+    bool reachLink(QString *error);
+
+    // Closes the port and, on a remote bus, lets go of the link. Used by the
+    // Close button and by a link that dropped underneath us.
+    void releaseLink();
+
+    bool isNetworkMode() const;
+    void updateLinkFields();
+    void updateLinkStatus();
     void clearServoList();
     void appendServoList(const int id, const QString &name);
     void clearProgMemTable();
@@ -78,7 +101,8 @@ private:
     //
     // fn runs on the other thread: it may use bus_ and its own by-value
     // captures, and nothing else. Reading bus_ from there is safe only because
-    // it is never reassigned after the constructor.
+    // it is never reassigned while the bus thread is running -- rebuildBus
+    // stops the thread before swapping it.
     template<typename F>
     auto runOnBus(F &&fn) -> decltype(fn())
     {
@@ -170,9 +194,14 @@ private:
 private slots:
     void onPortSearchTimerTimeout();
     void onConnectButtonClicked();
+    void onLinkModeChanged();
+    void onTransportLost(const QString &reason);
+    void onLinkStatusTimerTimeout();
 
     void onSearchButtonClicked();
-    void onSearchTimerTimeout();
+    void onScanProgress(int id);
+    void onScanFound(int id, int model_number);
+    void onScanFinished(bool completed);
     void onServoListSelection();
     void onTorqueAllButtonClicked();
     void onTorqueStateTimerTimeout();
@@ -217,11 +246,15 @@ private:
     Ui::MainWindow *ui;
     QTimer *graph_timer_;
     QThread *bus_thread_;
-    feetech_servo::ServoBus *bus_;
+    // Null until rebuildBus builds the first one, which the constructor does
+    // before anything can reach it. It reads this to decide whether there is
+    // an old bus to take down, so it must start null rather than as whatever
+    // happened to be on the stack.
+    feetech_servo::IServoBus *bus_ = nullptr;
     QStandardItemModel *servo_list_model_;
     QStandardItemModel *prog_mem_model_;
     QTimer *port_search_timer_;
-    QTimer *search_timer_;
+    QTimer *link_status_timer_;
     QTimer *auto_debug_timer_;
     QTimer *prog_timer_;
     QTimer *data_analysis_timer_;
@@ -239,7 +272,11 @@ private:
     // loop, so the periodic polls have to stand down for the same reason.
     bool prompt_open_ = false;
     // True when no periodic poll should touch the bus or the models.
-    bool pollsSuspended() const { return bus_busy_ || prompt_open_; }
+    //
+    // A scan is included because it holds the bus for its whole sweep: a poll
+    // that waited on it would hold user input back for as long, and the Stop
+    // button would stop working at the moment it is wanted.
+    bool pollsSuspended() const { return bus_busy_ || prompt_open_ || is_searching_; }
     // Set between asking for a telemetry sample and it arriving, so only one
     // request is ever outstanding and a slow bus paces itself.
     bool status_pending_ = false;
@@ -247,10 +284,26 @@ private:
     // Port names currently in the COM dropdown, so it is only rebuilt when the
     // set actually changes rather than on every refresh tick.
     QStringList com_port_names_;
+    // Paces the refresh over a network link, where it costs a round trip.
+    QElapsedTimer port_refresh_clock_;
+    // Set when something has made the list stale -- a link just came up, or
+    // the bus was swapped -- so the next tick refreshes without waiting out
+    // the interval.
+    bool port_refresh_due_ = true;
+
+    // True once a remote bus has handshaked. Always true for a local bus,
+    // whose servos are reachable as soon as the process starts.
+    bool link_up_ = false;
+
+    // Telemetry crossing a network is stamped by the machine that took the
+    // sample, on a clock of its own. This is what lines that clock up with the
+    // graph's, and it is measured once per link so the time axis stays
+    // continuous across a reconnect.
+    qint64 status_clock_offset_ = 0;
+    bool status_clock_aligned_ = false;
 
     bool is_searching_ = false;
     std::vector<uint8_t> id_list_;
-    int search_id_ = 0;
     struct
     {
         feetech_servo::ModelSeries model_ = feetech_servo::ModelSeries::STS;

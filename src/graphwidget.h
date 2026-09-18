@@ -134,7 +134,17 @@ public:
     };
 
     void reset_data();
-    void append_data(int pos, int goal, int torque, int speed, int current, int temp, int voltage);
+    // sample_ms is when the sample was taken, on this widget's own clock.
+    // Pass -1 to stamp it on arrival instead, which is only right when the
+    // two are the same thing -- they are not once the samples have crossed a
+    // network, where arrival time carries the link's jitter rather than the
+    // servo's motion.
+    void append_data(int pos, int goal, int torque, int speed, int current, int temp, int voltage,
+                     qint64 sample_ms = -1);
+
+    // Reading of the same clock the timestamps are measured against, so a
+    // caller can line an outside clock up with it.
+    qint64 elapsed() const { return clock_.elapsed(); }
 
     bool pos_visible = true;
     bool goal_visible = true;

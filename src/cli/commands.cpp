@@ -1,5 +1,7 @@
 #include "cli/commands.h"
 
+#include "net/bus_server.h"
+
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QElapsedTimer>
@@ -12,6 +14,7 @@
 #include <QSerialPortInfo>
 #include <QTextStream>
 #include <QThread>
+#include <QTimer>
 
 #include <algorithm>
 #include <cmath>
@@ -198,7 +201,7 @@ std::unique_ptr<Session> openSession(const CommandLine &line)
         return nullptr;
     }
 
-    auto session = std::make_unique<Session>(false);
+    auto session = std::make_unique<Session>(false, options.isRemote());
     if(!session->open(options, &error))
     {
         fail(error);
@@ -208,7 +211,10 @@ std::unique_ptr<Session> openSession(const CommandLine &line)
     if(line.flags.contains("verbose"))
     {
         err() << "Opened " << session->options().port << " at "
-              << session->options().baud << " baud.\n";
+              << session->options().baud << " baud";
+        if(session->isRemote())
+            err() << " on " << session->options().host;
+        err() << ".\n";
         err().flush();
     }
     return session;
@@ -444,6 +450,64 @@ CommandLine parseCommandLine(const QStringList &args)
     return line;
 }
 
+// Splits "host", "host:port" or ":port" into its parts, leaving whichever was
+// not given alone. Used by both --host on a client and --listen on the server,
+// so the two spell an endpoint the same way.
+static bool parseEndpoint(const QString &text, QString *host, quint16 *port, QString *error)
+{
+    const QString trimmed = text.trimmed();
+    if(trimmed.isEmpty())
+        return true;
+
+    const int colon = trimmed.lastIndexOf(':');
+    // A bare number is a port, not a hostname -- "--listen 5555" is what most
+    // people will try first.
+    bool numeric = false;
+    trimmed.toUShort(&numeric);
+    if(numeric)
+    {
+        *port = trimmed.toUShort();
+        return true;
+    }
+
+    // A bare IPv6 literal is all colons and no port. Telling it apart from
+    // "host:port" by counting them is enough here: the only spelling that has
+    // both is the bracketed one, which is handled above it.
+    if(colon < 0 || (trimmed.count(':') > 1 && !trimmed.startsWith('[')))
+    {
+        *host = trimmed;
+        return true;
+    }
+
+    if(trimmed.startsWith('[') && trimmed.contains("]:"))
+    {
+        const int close = trimmed.lastIndexOf("]:");
+        bool bracketed_ok = false;
+        const ushort bracketed = trimmed.mid(close + 2).toUShort(&bracketed_ok);
+        if(!bracketed_ok || bracketed == 0)
+        {
+            *error = QString("\"%1\" is not a port number.").arg(trimmed.mid(close + 2));
+            return false;
+        }
+        *host = trimmed.mid(1, close - 1);
+        *port = bracketed;
+        return true;
+    }
+
+    const QString tail = trimmed.mid(colon + 1);
+    bool ok = false;
+    const ushort parsed = tail.toUShort(&ok);
+    if(!ok || parsed == 0)
+    {
+        *error = QString("\"%1\" is not a port number.").arg(tail);
+        return false;
+    }
+
+    *host = trimmed.left(colon);
+    *port = parsed;
+    return true;
+}
+
 bool connectionFrom(const CommandLine &line, ConnectionOptions *out, QString *error)
 {
     ConnectionOptions options;
@@ -477,6 +541,21 @@ bool connectionFrom(const CommandLine &line, ConnectionOptions *out, QString *er
         return false;
     }
 
+    options.net_port = servobench_net::DEFAULT_PORT;
+
+    const QString host = line.value("host");
+    if(!host.isEmpty())
+    {
+        if(!parseEndpoint(host, &options.host, &options.net_port, error))
+            return false;
+        if(options.host.isEmpty())
+        {
+            *error = "--host needs a machine to connect to, for example robot.local:5555.";
+            return false;
+        }
+    }
+    options.token = line.value("token");
+
     *out = options;
     return true;
 }
@@ -488,8 +567,29 @@ int runPorts(const CommandLine &line)
 {
     const bool show_all = line.flags.contains("all");
 
-    QVector<PortInfo> ports = availablePorts();
-    if(show_all)
+    ConnectionOptions options;
+    QString error;
+    if(!connectionFrom(line, &options, &error))
+    {
+        fail(error);
+        return 2;
+    }
+
+    // With --host the interesting ports are the server's, so ask it. Nothing
+    // is opened: this is the step that tells you what there is to open.
+    std::unique_ptr<Session> session;
+    if(options.isRemote())
+    {
+        session = std::make_unique<Session>(false, true);
+        if(!session->reach(options, &error))
+        {
+            fail(error);
+            return 1;
+        }
+    }
+
+    QVector<PortInfo> ports = session ? session->ports() : availablePorts();
+    if(show_all && !session)
     {
         ports.clear();
         for(const QSerialPortInfo &info : QSerialPortInfo::availablePorts())
@@ -503,9 +603,16 @@ int runPorts(const CommandLine &line)
         }
     }
 
+    if(show_all && session)
+    {
+        err() << "--all only applies to this machine's ports; the server sends the "
+                 "filtered list.\n";
+        err().flush();
+    }
+
     if(ports.isEmpty())
     {
-        out() << "No serial ports found.\n";
+        out() << (session ? "The server reports no serial ports.\n" : "No serial ports found.\n");
         out().flush();
         return 1;
     }
@@ -539,7 +646,7 @@ int runPorts(const CommandLine &line)
     }
     printTable(QStringList() << "PORT" << "DESCRIPTION" << "MANUFACTURER" << "BUS", rows);
 
-    if(!show_all)
+    if(!show_all && !session)
         out() << "\nPorts without a USB vendor id are hidden. Pass --all to see them.\n";
     out().flush();
     return 0;
@@ -2072,6 +2179,10 @@ void printUsage()
 "  -b, --baud RATE      default 1000000\n"
 "      --parity MODE    none, odd or even (default none)\n"
 "  -t, --timeout MS     read timeout, default 50\n"
+"      --host H[:PORT]  drive the bus on another machine running \"serve\"\n"
+"                       (default network port 5555); --port then names the\n"
+"                       serial port on that machine\n"
+"      --token T        token the server was started with\n"
 "\n"
 "Looking around:\n"
 "  ports [--all] [--json]              list serial ports\n"
@@ -2114,6 +2225,10 @@ void printUsage()
 "  tui [--plain] [--ascii] [--no-mouse]\n"
 "    --plain drops colour, --ascii drops the braille plot and box drawing.\n"
 "\n"
+"Serving this machine's bus to a remote ServoBench:\n"
+"  serve [--listen [ADDR][:PORT]] [--token T] [--on-disconnect hold|stop|release]\n"
+"        [connection options for the serial port to hold]\n"
+"\n"
 "Other:\n"
 "  --help [command]     this text, or help for one command\n"
 "  --version            version and Qt build\n"
@@ -2123,7 +2238,9 @@ void printUsage()
 "  servobench-cli -p ttyUSB0 info 1\n"
 "  servobench-cli monitor 1 --hz 50 --csv > run.csv\n"
 "  servobench-cli write 1 \"Position P Gain\" 24\n"
-"  servobench-cli torque all off && servobench-cli calib home --yes\n";
+"  servobench-cli torque all off && servobench-cli calib home --yes\n"
+"  servobench-cli serve -p ttyUSB0 --listen 0.0.0.0:5555 --token hunter2\n"
+"  servobench-cli --host robot.local --token hunter2 scan\n";
     out().flush();
 }
 
@@ -2162,6 +2279,25 @@ void printCommandHelp(const QString &command)
          "  3. calib export  validates and writes LeRobot's calibration.json.\n\n"
          "What the window keeps in its table between button presses lives in a state file "
          "here instead, so the steps can be separate commands."},
+        {"serve",
+         "serve [--listen [ADDR][:PORT]] [--token T] [--on-disconnect hold|stop|release]\n"
+         "      [-p PORT] [-b BAUD] [--parity MODE] [-t MS]\n\n"
+         "Holds this machine's serial bus and lets one ServoBench -- the window or this "
+         "tool with --host -- drive it over TCP. Run it on the robot; everything else "
+         "stays on your desk.\n\n"
+         "One client at a time: two would interleave packets on a bus whose protocol "
+         "cannot tell whose reply is whose, so a second connection is refused with a "
+         "reason.\n\n"
+         "--listen defaults to 127.0.0.1:5555. Loopback is deliberate: pass 0.0.0.0 to "
+         "reach it from another machine, and a --token with it, or leave it on loopback "
+         "and tunnel in with ssh -L 5555:localhost:5555 robot.\n\n"
+         "--on-disconnect decides what happens to the servos when the client goes away "
+         "or stops answering:\n"
+         "  stop     (default) command each servo the position it is in. Torque stays "
+         "on, so an arm keeps holding itself up and anything moving comes to rest.\n"
+         "  hold     change nothing. The last command stands -- a wheel-mode servo "
+         "keeps turning.\n"
+         "  release  torque off. An arm under gravity will fall."},
         {"tui",
          "tui [--plain] [--ascii] [--no-mouse]\n\n"
          "The full-screen tool: live plot, servo control, register map and calibration, "
@@ -2176,6 +2312,86 @@ void printCommandHelp(const QString &command)
     }
     out() << text << "\n";
     out().flush();
+}
+
+// Hands this machine's serial bus to a ServoBench client over the network.
+//
+// The whole point of running it here rather than tunnelling raw serial bytes
+// is that a transaction costs one round trip instead of one per servo packet,
+// and that a multi-step sequence -- unlock EPROM, write, relock, verify --
+// completes on this machine even if the link drops half way through it.
+int runServe(const CommandLine &line)
+{
+    ConnectionOptions serial;
+    QString error;
+    if(!connectionFrom(line, &serial, &error))
+    {
+        fail(error);
+        return 2;
+    }
+
+    if(!serial.host.isEmpty())
+    {
+        fail("serve holds a bus rather than connecting to one, so it takes --listen, "
+             "not --host.");
+        return 2;
+    }
+
+    servobench_net::ServerConfig config;
+    config.device = serial.port;
+    config.baud = serial.baud;
+    config.parity = serial.parity;
+    config.timeout = serial.timeout;
+    config.token = line.value("token");
+    config.verbose = line.flags.contains("verbose");
+
+    if(line.has("listen") && !parseEndpoint(line.value("listen"), &config.bind, &config.port, &error))
+    {
+        fail(error);
+        return 2;
+    }
+
+    if(line.has("on-disconnect"))
+    {
+        bool ok = false;
+        config.on_disconnect = servobench_net::disconnectPolicyFromName(line.value("on-disconnect"), &ok);
+        if(!ok)
+        {
+            fail("--on-disconnect takes hold, stop or release.");
+            return 2;
+        }
+    }
+
+    // With no --port, hold the first USB adapter, which is what the window's
+    // dropdown lands on too. The client can still close it and open another.
+    if(config.device.isEmpty())
+    {
+        const QVector<PortInfo> ports = availablePorts();
+        if(!ports.isEmpty())
+            config.device = ports.first().name;
+    }
+
+    servobench_net::BusServer server(config);
+    if(!server.start(&error))
+    {
+        fail(error);
+        return 1;
+    }
+
+    // Ctrl-C only sets a flag, so the server has to come back to look at it.
+    // Leaving through quit() rather than _exit lets ~BusServer close the port
+    // on the bus thread, which is the one thread allowed to close it.
+    QTimer stop;
+    QObject::connect(&stop, &QTimer::timeout, [] {
+        if(interrupted())
+            QCoreApplication::quit();
+    });
+    stop.start(200);
+
+    const int code = QCoreApplication::exec();
+    out() << "Stopped.\n";
+    out().flush();
+    return code;
 }
 
 int runCommand(const CommandLine &line)
@@ -2220,6 +2436,8 @@ int runCommand(const CommandLine &line)
         return runSweepOrStep(line, true);
     if(command == "calib")
         return runCalib(line);
+    if(command == "serve")
+        return runServe(line);
 
     fail(QString("Unknown command \"%1\". Try servobench-cli --help.").arg(line.command));
     return 2;

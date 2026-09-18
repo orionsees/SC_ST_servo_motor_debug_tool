@@ -20,6 +20,10 @@ newer, x86-64**. It links against the system Qt 5 rather than bundling it,
 hence the `apt install` above. On anything else — older Ubuntu, ARM, another
 distro with a different Qt — build from source below.
 
+> This binary predates the network link, so it has no **Link** selector. Build
+> from source for that. It is deliberately not rebuilt on a newer machine:
+> doing so would raise its glibc floor and drop Ubuntu 22.04.
+
 ## Build
 
 Needs Qt 5.14+ (5.15 recommended) with the SerialPort module. Portable Qt, no
@@ -29,25 +33,32 @@ platform-specific code.
 
 ```bash
 sudo apt install -y qtbase5-dev libqt5serialport5-dev qtchooser g++ make
-qmake ServoBench.pro
-make -j"$(nproc)"
+
+mkdir -p build && cd build
+qmake ../ServoBench.pro && make -j"$(nproc)"
 ./servobench
 ```
 
-The same packages on the ARM boards. The window needs a desktop session
-though, so on a headless Raspberry Pi or Jetson build the terminal tool
-instead -- see [Terminal version](#terminal-version) below.
+Build out of tree as above. In-source works, but a stray `ui_mainwindow.h` left
+beside the sources shadows the generated one and breaks later builds
+confusingly.
 
-Prefer building out of tree, a stray `ui_mainwindow.h` beside the sources
-shadows the generated one and breaks later builds confusingly:
+The terminal tool is a second project, and worth building too — it is what
+serves a bus over the network, so the robot needs it even when the window does
+not:
 
 ```bash
-mkdir -p build && cd build
-qmake ../ServoBench.pro && make -j"$(nproc)"
+cd .. && mkdir -p build-cli && cd build-cli
+qmake ../ServoBenchCli.pro && make -j"$(nproc)"
 ```
 
-Clean: `rm -rf build`, or in-source `make clean` (objects, `moc_*`, `ui_*.h`)
-and `make distclean` (also binary and Makefile — re-run `qmake` after).
+The same packages on the ARM boards. The window needs a desktop session
+though, so on a headless Raspberry Pi or Jetson build only the terminal tool
+-- see [Terminal version](#terminal-version) below.
+
+Clean: `rm -rf build build-cli`, or in-source `make clean` (objects, `moc_*`,
+`ui_*.h`) and `make distclean` (also binary and Makefile — re-run `qmake`
+after).
 
 For port access without `sudo`: `sudo usermod -aG dialout $USER`, then log back
 in.
@@ -95,8 +106,161 @@ Windows 11, otherwise from WCH.
 - **Calibration** — gated on torque being released. Sets midpoint, records range
   of motion, exports `calibration.json`.
 - Servo faults (register 65) are decoded and shown per servo in the servo list.
+- **Remote bus** — run the servos from a robot and the window from your desk.
+  The robot runs `servobench-cli serve`; the window connects to it and works
+  exactly as it does on a local port. See below.
 - **Terminal version** — `servobench-cli`, the same three tabs in a full-screen
   terminal tool, plus one-shot commands for scripts. See below.
+
+
+## Using the window
+
+```bash
+./build/servobench
+```
+
+1. Leave **Link** on `Serial`.
+2. Pick the adapter in **Com**. Only ports with a USB vendor id are listed,
+   which is what hides the kernel's 30-odd `ttyS*` stubs; if nothing has one --
+   a motherboard COM port would not -- everything is listed instead.
+3. Set **BaudR** to whatever the servos are set to. Both tools default to
+   `1000000`, which is the usual factory setting for STS and SMS. A servo
+   records its own rate in its Baud Rate register (address 6), so once one
+   answers you can read it back there.
+4. Press **Open**, then **Search**. Every ID from 0 to 253 is pinged; press the
+   same button again to stop early.
+5. Select a servo in the list. The Debug tab plots it, Programming shows its
+   register map, Calibration is gated on torque being released.
+
+If the port will not open, it is usually permissions:
+`sudo usermod -aG dialout $USER`, then log out and back in.
+
+
+## Driving a robot's servos over the network
+
+The servos are on the robot; you would rather not be. The robot runs a server,
+the window connects to it, and everything works the way it does on a local
+port — the **Com** dropdown just lists the robot's serial ports instead of
+yours.
+
+### On the robot
+
+It needs its own `servobench-cli` — build it there, as
+[above](#build) (an ARM board needs no window, so the `ServoBenchCli.pro`
+project alone is enough). Then:
+
+```bash
+servobench-cli serve --port /dev/ttyUSB0 --baud 1000000 --listen 0.0.0.0:5555 --token hunter2
+```
+
+It prints what it is serving, and says so if you have opened it to every
+interface without a token. Leave it running; a `systemd` unit is the obvious
+home for it once you are past trying it out.
+
+### In the window
+
+1. Set **Link** to `Network`. **Host**, **Port** and **Token** appear.
+2. Fill in the robot's name or address, `5555`, and the token.
+3. Press **Open**. It reaches the robot, fills **Com** with the robot's serial
+   ports, starts on the one the server was told to hold, and opens it.
+4. The line underneath reads `Connected to robot.local - 4 ms round trip`.
+   Every tab now works as it does locally.
+5. **Close** shuts the port and lets go of the link.
+
+**Link**, **Host**, **Port** and **Token** are editable whenever the port is
+closed, so correcting a typo is pressing **Open** again — it reconnects with
+whatever is in the fields.
+
+### From a shell
+
+The same server, driven by the terminal tool:
+
+```bash
+servobench-cli --host robot.local --token hunter2 scan
+servobench-cli --host robot.local --token hunter2 monitor 1 --hz 50 --csv > run.csv
+```
+
+Leave `--port` out and the port the server already holds is used as it stands.
+
+### Why not just tunnel the serial port
+
+`ser2net` and friends move raw bytes, and the Feetech protocol is strict
+request/response — so every transaction costs a network round trip. A single
+telemetry sample is eight of them, and an ID scan is 254:
+
+| operation | serial transactions | LAN, 2 ms | Wi-Fi, 30 ms |
+|---|---|---|---|
+| one telemetry sample | 8 | 16 ms | 240 ms |
+| register write (unlock, write, relock, verify) | 4–5 | 10 ms | 150 ms |
+| ID scan | 254 | 0.5 s | 7.6 s |
+
+ServoBench cuts higher up instead: one round trip per *operation*, whatever it
+costs in serial transactions. A telemetry sample is one request. So is a scan.
+
+It also keeps the multi-step sequences on the robot. An EPROM write unlocks,
+writes, relocks and verifies; over a byte tunnel a link that drops in the middle
+leaves a servo with its EPROM unlocked. Here the whole sequence either runs on
+the robot or does not start.
+
+And a read that gets no answer stays distinguishable from a link that died —
+over a byte tunnel both look like a servo that stopped responding, so a Wi-Fi
+hiccup reads as every servo failing at once.
+
+### Safety
+
+One client at a time. Two would interleave packets on a bus whose protocol has
+no way to tell whose reply is whose, so a second connection is refused with a
+reason rather than quietly corrupting the first.
+
+`--on-disconnect` decides what happens to the servos when the client goes away
+or stops answering — the server notices within about six seconds, whether the
+client closed, crashed, or drove out of Wi-Fi range:
+
+| | |
+|---|---|
+| `stop` (default) | Command each servo the position it is in. Torque stays on, so an arm keeps holding itself up and anything moving comes to rest. This puts a wheel-mode servo into position mode, which is what stopping one requires. |
+| `hold` | Change nothing. The last command stands — a wheel-mode servo keeps turning. |
+| `release` | Torque off. An arm under gravity will fall. |
+
+Only servos the client actually *commanded* are affected. One that was merely
+read has not been disturbed, so it is left alone.
+
+`--listen` defaults to `127.0.0.1:5555`. Loopback is deliberate: a robot's
+motors should not become reachable from a conference Wi-Fi because a default
+was left alone. To reach it from another machine, either pass a `--token` and
+bind wider, or leave it on loopback and tunnel in, which needs no token and no
+new code:
+
+```bash
+ssh -L 5555:localhost:5555 robot      # then connect the window to 127.0.0.1:5555
+```
+
+The token is a shared secret checked at the handshake, not a transport cipher —
+it keeps the wrong client off the bus on a LAN you trust. For anything you do
+not trust, use the tunnel.
+
+### The wire, if you want to drive it yourself
+
+One TCP connection carrying length-prefixed JSON: a four-byte big-endian byte
+count, then that many bytes of UTF-8.
+
+```
+request  {"seq": 7, "op": "readStatus", "args": {"id": 1, "series": 2}}
+reply    {"seq": 7, "ok": true, "result": {"status": {...}}}
+event    {"event": "scanFound", "data": {"id": 3, "model": 777}}
+```
+
+Every request draws one reply carrying its `seq`; events are unsolicited and
+carry none. Sequence 0 is reserved for an error against the connection itself,
+such as being turned away because another client holds the bus.
+
+Registers cross as a series and an address, never as a copy of the register
+table, so the table that decides a register's width, its sign-magnitude
+encoding and whether it needs the EPROM unlocked is always the robot's.
+
+It is plain enough to drive from a shell with netcat, or from a Python script
+that links none of this — which is the point of choosing JSON for a few hundred
+bytes per sample.
 
 
 ## Terminal version
@@ -256,10 +420,18 @@ servobench-cli torque all off
 servobench-cli pos 1 3000 --speed 600 --wait
 servobench-cli angle 1 -45 --unit deg
 servobench-cli sweep 1 --start 1000 --end 3000 --hold 500
+
+servobench-cli serve -p ttyUSB0 --listen 0.0.0.0:5555 --token hunter2
+servobench-cli --host robot.local --token hunter2 scan
 ```
 
 `--json` on the read-only commands prints machine-readable output; `--quiet` on
 `read` prints the bare value.
+
+`--host H[:PORT]` sends any command to a machine running `serve` instead of to
+a local port, and `--port` then names the serial port on *that* machine. Leave
+it out and the port the server already holds is used as it stands. See
+[Driving a robot's servos over the network](#driving-a-robots-servos-over-the-network).
 
 Calibration is three steps in the window, so it is three commands here, sharing
 a state file (`~/.cache/servobench/calibration-state.json`, or `--state PATH`):
@@ -294,11 +466,16 @@ src/
     session.{h,cpp}     the bus, the servo table and the CSV recorder
     term.{h,cpp}        raw mode, key and mouse decoding, screen diffing
     calib_state.h       calibration state shared between the calib commands
+  net/
+    protocol.{h,cpp}    the wire: framing, ops, value codecs
+    remote_bus.{h,cpp}  a bus reached over TCP -- the client half
+    bus_server.{h,cpp}  serves this machine's bus to one client
   servo/
     scserial.{h,cpp}    serial protocol, model tables
-    servo_bus.{h,cpp}   owns the port; every transaction on its own thread
+    servo_bus.{h,cpp}   IServoBus, and the one on this machine's port
     servo_driver.h      common servo interface + per-series drivers
     servo_types.h       register maps, series traits, status decoding
+    port_list.h         the serial ports worth offering
     sms_sts.h, scscl.h  per-series servo classes (header only)
 packaging/servobench    prebuilt x86-64 binary for Ubuntu 22.04+
 ```
@@ -308,7 +485,16 @@ port; with one bus thread its event queue is also the bus lock, so transactions
 cannot interleave on the wire. `MainWindow` uses `runOnBus(fn)` to wait for a
 result while the window keeps repainting, and `postToBus(fn)` to fire and
 forget. Either way `fn` runs on the bus thread and may touch only `bus_` and its
-own by-value captures — `ServoBus` asserts this in debug builds.
+own by-value captures — `IServoBus` asserts this in debug builds.
+
+`IServoBus` is that whole surface as an interface, with two implementations:
+`ServoBus` on this machine's serial port, and `RemoteServoBus` over a socket.
+They share the thread rule, so the window and the terminal tool drive either one
+without knowing which they have. The server is the same `ServoBus` again, with
+`BusServer` in front of it translating the wire — so the protocol quirks that
+matter (sign-magnitude, per-series endianness, the EPROM lock dance, holding
+torque across a write) exist in exactly one place and cannot drift between
+local and remote.
 
 ## Screenshots
 

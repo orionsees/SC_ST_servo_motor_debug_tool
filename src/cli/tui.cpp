@@ -87,7 +87,7 @@ QString bar(double fraction, int width)
 
 Tui::Tui(const ConnectionOptions &options, QObject *parent)
     : QObject(parent)
-    , session_(true)
+    , session_(true, options.isRemote())
     , options_(options)
 {
     clock_.start();

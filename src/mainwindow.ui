@@ -43,43 +43,53 @@
          <number>8</number>
         </property>
         <item row="0" column="0">
+         <widget class="QLabel" name="linkLabel">
+          <property name="text">
+           <string>Link</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QComboBox" name="LinkComboBox"/>
+        </item>
+        <item row="1" column="0">
          <widget class="QLabel" name="label">
           <property name="text">
            <string>Com</string>
           </property>
          </widget>
         </item>
-        <item row="0" column="1">
+        <item row="1" column="1">
          <widget class="QComboBox" name="ComComboBox" />
         </item>
-        <item row="1" column="0">
+        <item row="2" column="0">
          <widget class="QLabel" name="label_3">
           <property name="text">
            <string>BaudR</string>
           </property>
          </widget>
         </item>
-        <item row="3" column="0">
+        <item row="4" column="0">
          <widget class="QLabel" name="label_6">
           <property name="text">
            <string>TimeOut</string>
           </property>
          </widget>
         </item>
-        <item row="2" column="0">
+        <item row="3" column="0">
          <widget class="QLabel" name="label_4">
           <property name="text">
            <string>DParity</string>
           </property>
          </widget>
         </item>
-        <item row="1" column="1">
+        <item row="2" column="1">
          <widget class="QComboBox" name="BaudComboBox" />
         </item>
-        <item row="2" column="1">
+        <item row="3" column="1">
          <widget class="QComboBox" name="ParityComboBox" />
         </item>
-        <item row="3" column="1">
+        <item row="4" column="1">
          <widget class="QLineEdit" name="timeoutLineEdit">
           <property name="text">
            <string>50</string>
@@ -87,6 +97,69 @@
          </widget>
         </item>
        </layout>
+      </item>
+      <item>
+       <widget class="QWidget" name="netSettingsWidget" native="true">
+        <layout class="QFormLayout" name="netFormLayout">
+         <property name="verticalSpacing">
+          <number>8</number>
+         </property>
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item row="0" column="0">
+          <widget class="QLabel" name="hostLabel">
+           <property name="text">
+            <string>Host</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QLineEdit" name="hostLineEdit">
+           <property name="placeholderText">
+            <string>robot.local</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="netPortLabel">
+           <property name="text">
+            <string>Port</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QLineEdit" name="netPortLineEdit">
+           <property name="text">
+            <string>5555</string>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="0">
+          <widget class="QLabel" name="tokenLabel">
+           <property name="text">
+            <string>Token</string>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="1">
+          <widget class="QLineEdit" name="tokenLineEdit">
+           <property name="placeholderText">
+            <string>optional</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
       </item>
       <item>
        <layout class="QHBoxLayout" name="horizontalLayout_6">
@@ -111,6 +184,16 @@
          </widget>
         </item>
        </layout>
+      </item>
+      <item>
+       <widget class="QLabel" name="linkStatusLabel">
+        <property name="text">
+         <string/>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
       </item>
      </layout>
     </widget>

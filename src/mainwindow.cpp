@@ -2,7 +2,6 @@
 #include "theme.h"
 #include "ui_mainwindow.h"
 #include <QSerialPort>
-#include <QSerialPortInfo>
 #include <QAbstractItemView>
 #include <QTimer>
 #include <QTableView>
@@ -69,12 +68,8 @@ MainWindow::MainWindow(QWidget *parent)
 
     // Every servo transaction runs here, so a blocking read never stalls the
     // window. The bus owns the port; the UI only posts work to it.
-    bus_ = new feetech_servo::ServoBus();
     bus_thread_ = new QThread(this);
-    bus_->moveToThread(bus_thread_);
-    connect(bus_, &feetech_servo::ServoBus::statusReady, this, &MainWindow::onStatusReady);
-    connect(bus_, &feetech_servo::ServoBus::openedChanged, this, &MainWindow::onBusOpenedChanged);
-    bus_thread_->start();
+    rebuildBus(false);
 
     setupComSettings();
     setupServoLists();
@@ -102,12 +97,18 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
-    // Close the port on the bus thread, and wait for it. quit() is not a
+    // Shut the bus down on its own thread, and wait for it. quit() is not a
     // queued event -- it sets the loop's exit flag directly, so a merely posted
-    // close can be dropped without ever running, leaving the port to be closed
-    // by ~QSerialPort on this thread instead. Its notifiers belong to the bus
-    // thread, so that has to be avoided.
-    QMetaObject::invokeMethod(bus_, [this]{ bus_->close(); }, Qt::BlockingQueuedConnection);
+    // close can be dropped without ever running, leaving the port or the
+    // socket to be torn down on this thread instead. Their notifiers belong to
+    // the bus thread, so that has to be avoided.
+    QMetaObject::invokeMethod(bus_, [this]{
+        // A remote port belongs to the server, which keeps serving after this
+        // window closes; letting go of the link is all that is ours to do.
+        if(!bus_->isRemote())
+            bus_->close();
+        bus_->disconnectTransport();
+    }, Qt::BlockingQueuedConnection);
     bus_thread_->quit();
     bus_thread_->wait();
     delete bus_;
@@ -117,7 +118,7 @@ MainWindow::~MainWindow()
     delete servo_list_model_;
     delete prog_mem_model_;
     delete port_search_timer_;
-    delete search_timer_;
+    delete link_status_timer_;
     delete auto_debug_timer_;
     delete prog_timer_;
 }
@@ -131,11 +132,27 @@ void MainWindow::setupComSettings()
     ui->ParityComboBox->addItems(parity);
 
     setIntRangeLineEdit(ui->timeoutLineEdit, 0, 10000);
+
+    ui->LinkComboBox->addItems(QStringList() << "Serial" << "Network");
+    setIntRangeLineEdit(ui->netPortLineEdit, 1, 65535);
+    // A token is a credential, and this panel is the part of the window most
+    // likely to be on screen while someone is demonstrating a robot.
+    ui->tokenLineEdit->setEchoMode(QLineEdit::Password);
+    connect(ui->LinkComboBox, &QComboBox::currentTextChanged, this, &MainWindow::onLinkModeChanged);
+    updateLinkFields();
+    updateLinkStatus();
+
+    port_refresh_clock_.start();
     onPortSearchTimerTimeout();
     connect(ui->ComOpenButton, &QPushButton::clicked, this, &MainWindow::onConnectButtonClicked);
     port_search_timer_ = new QTimer(this);
     connect(port_search_timer_, &QTimer::timeout, this, &MainWindow::onPortSearchTimerTimeout);
     port_search_timer_->start(500);
+
+    // Only the latency reading moves on its own, so this is slow on purpose.
+    link_status_timer_ = new QTimer(this);
+    connect(link_status_timer_, &QTimer::timeout, this, &MainWindow::onLinkStatusTimerTimeout);
+    link_status_timer_->start(1000);
 }
 
 void MainWindow::setupServoLists()
@@ -146,9 +163,6 @@ void MainWindow::setupServoLists()
     servo_list_model_ = new QStandardItemModel(0, 2);
     ui->ServoListView->setModel(servo_list_model_);
     clearServoList();
-
-    search_timer_ = new QTimer(this);
-    connect(search_timer_, &QTimer::timeout, this, &MainWindow::onSearchTimerTimeout);
 
     connect(ui->torqueAllButton, &QPushButton::clicked, this, &MainWindow::onTorqueAllButtonClicked);
     updateTorqueAllButton();
@@ -1029,38 +1043,36 @@ void MainWindow::regWritePos(int pos, int time, int speed, int acc)
 
 void MainWindow::onPortSearchTimerTimeout()
 {
-    if(bus_open_)
-        return;
-
-    // Never rebuild while the user is looking at the list -- that would pull
-    // the popup out from under the click.
+    // Rebuilding the list under an open dropdown would snatch it away mid
+    // choice, so wait until it is closed.
     if(ui->ComComboBox->view()->isVisible())
         return;
 
-    // availablePorts() also reports the kernel's legacy ttyS0..ttyS31 stubs,
-    // which are not physically present and drown the one real adapter in a list
-    // of 30-odd dead entries. A USB serial adapter always carries a vendor
-    // identifier, which is what separates the two.
-    QVector<QSerialPortInfo> ports;
-    for(const QSerialPortInfo &info : QSerialPortInfo::availablePorts())
-    {
-        if(info.hasVendorIdentifier())
-            ports.append(info);
-    }
+    QVector<feetech_servo::PortInfo> ports;
 
-    // Unless nothing has one -- a genuine motherboard COM port would not --
-    // in which case show everything rather than an empty list.
-    if(ports.isEmpty())
+    if(bus_->isRemote())
     {
-        for(const QSerialPortInfo &info : QSerialPortInfo::availablePorts())
-            ports.append(info);
+        // The ports that matter are the robot's, and each look costs a round
+        // trip, so this is paced rather than run at the local cadence.
+        if(!link_up_ || pollsSuspended())
+            return;
+        if(!port_refresh_due_ && port_refresh_clock_.elapsed() < REMOTE_PORT_REFRESH_MS)
+            return;
+
+        port_refresh_due_ = false;
+        port_refresh_clock_.restart();
+        ports = runOnBus([this]{ return bus_->listPorts(); });
+    }
+    else
+    {
+        ports = feetech_servo::localPorts();
     }
 
     QStringList names;
-    for(const QSerialPortInfo &p : ports)
-        names << p.portName();
+    for(const feetech_servo::PortInfo &p : ports)
+        names << p.name;
 
-    // Rebuilding on every tick reset the selection twice a second, which is
+    // Rebuilding the list resets the selection, and doing that every tick lost
     // what made a port impossible to choose. Only touch the list when the set
     // of ports has actually changed, and put the selection back afterwards.
     if(names == com_port_names_)
@@ -1071,147 +1083,388 @@ void MainWindow::onPortSearchTimerTimeout()
 
     QSignalBlocker blocker(ui->ComComboBox);
     ui->ComComboBox->clear();
-    for(const QSerialPortInfo &p : ports)
+    for(const feetech_servo::PortInfo &p : ports)
     {
         // The port name is what gets opened; the description is what lets you
-        // tell a CH340 servo board from anything else plugged in.
-        const QString label = p.description().isEmpty()
-                            ? p.portName()
-                            : QString("%1 - %2").arg(p.portName(), p.description());
-        ui->ComComboBox->addItem(label, p.portName());
+        // tell one adapter from another.
+        const QString label = p.description.isEmpty()
+                            ? p.name
+                            : QString("%1 - %2").arg(p.name, p.description);
+        ui->ComComboBox->addItem(label, p.name);
     }
 
-    const int restore = ui->ComComboBox->findData(selected);
+    int restore = ui->ComComboBox->findData(selected);
+    if(restore < 0 && bus_->isRemote())
+    {
+        // Nothing was chosen yet, so start on the port the server was told to
+        // hold. On a robot that is settled when the server is started, and it
+        // is the one the user almost certainly wants.
+        //
+        // The server may name it either way round -- "/dev/ttyUSB0" is what a
+        // shell user types, "ttyUSB0" is what the port list carries -- so the
+        // match is on the bare name.
+        auto *remote = static_cast<servobench_net::RemoteServoBus *>(bus_);
+        const QString wanted = remote->serverDevice().section('/', -1);
+        for(int i = 0; i < ui->ComComboBox->count() && restore < 0; i++)
+        {
+            if(ui->ComComboBox->itemData(i).toString().section('/', -1) == wanted)
+                restore = i;
+        }
+    }
     if(restore >= 0)
         ui->ComComboBox->setCurrentIndex(restore);
 }
 
+bool MainWindow::isNetworkMode() const
+{
+    return ui->LinkComboBox->currentIndex() == 1;
+}
+
+void MainWindow::updateLinkFields()
+{
+    ui->netSettingsWidget->setVisible(isNetworkMode());
+
+    // Everything here describes where the bus is, so it is settled only while
+    // a port is actually open on it. Keying this off the link being up instead
+    // would strand a window that reached a server but could not open a port on
+    // it: no way to correct the host, and no way back to a local port either.
+    ui->LinkComboBox->setEnabled(!bus_open_);
+    ui->hostLineEdit->setEnabled(!bus_open_);
+    ui->netPortLineEdit->setEnabled(!bus_open_);
+    ui->tokenLineEdit->setEnabled(!bus_open_);
+}
+
+void MainWindow::updateLinkStatus()
+{
+    if(!bus_->isRemote())
+    {
+        ui->linkStatusLabel->clear();
+        return;
+    }
+
+    if(!link_up_)
+    {
+        ui->linkStatusLabel->setText("Not connected.");
+        return;
+    }
+
+    ui->linkStatusLabel->setText(QString("Connected to %1 - %2 ms round trip")
+                                     .arg(ui->hostLineEdit->text().trimmed())
+                                     .arg(bus_->latencyMs()));
+}
+
+void MainWindow::rebuildBus(bool remote)
+{
+    const bool was_polling = status_pending_;
+
+    if(bus_ != nullptr)
+    {
+        // Stopping the thread is what makes the swap safe: nothing can be
+        // reading bus_ across it. Deleting the old bus then drops the calls
+        // still queued for it, rather than letting them run against the new
+        // one once the thread restarts.
+        QMetaObject::invokeMethod(bus_, [this]{
+            if(!bus_->isRemote())
+                bus_->close();
+            bus_->disconnectTransport();
+        }, Qt::BlockingQueuedConnection);
+        bus_thread_->quit();
+        bus_thread_->wait();
+        delete bus_;
+    }
+
+    bus_ = remote ? static_cast<feetech_servo::IServoBus *>(new servobench_net::RemoteServoBus())
+                  : static_cast<feetech_servo::IServoBus *>(new feetech_servo::ServoBus());
+    bus_->moveToThread(bus_thread_);
+
+    connect(bus_, &feetech_servo::IServoBus::statusReady, this, &MainWindow::onStatusReady);
+    connect(bus_, &feetech_servo::IServoBus::openedChanged, this, &MainWindow::onBusOpenedChanged);
+    connect(bus_, &feetech_servo::IServoBus::transportLost, this, &MainWindow::onTransportLost);
+    connect(bus_, &feetech_servo::IServoBus::scanProgress, this, &MainWindow::onScanProgress);
+    connect(bus_, &feetech_servo::IServoBus::scanFound, this, &MainWindow::onScanFound);
+    connect(bus_, &feetech_servo::IServoBus::scanFinished, this, &MainWindow::onScanFinished);
+
+    bus_thread_->start();
+
+    bus_open_ = false;
+    // A serial bus is already where its servos are; a network one has a
+    // connection still to make.
+    link_up_ = !remote;
+    status_pending_ = false;
+    status_clock_aligned_ = false;
+    port_refresh_due_ = true;
+
+    // The telemetry chain is each sample asking for the next, so a sample
+    // dropped with the old bus would end it. Start it again.
+    if(was_polling)
+        QTimer::singleShot(0, this, &MainWindow::requestNextStatus);
+}
+
+bool MainWindow::reachLink(QString *error)
+{
+    if(!bus_->isRemote())
+    {
+        link_up_ = true;
+        return true;
+    }
+
+    const QString host = ui->hostLineEdit->text().trimmed();
+    if(host.isEmpty())
+    {
+        *error = "Enter the machine running \"servobench-cli serve\".";
+        return false;
+    }
+
+    const auto net_port = static_cast<quint16>(ui->netPortLineEdit->text().toUInt());
+    const QString token = ui->tokenLineEdit->text();
+
+    BusyCursor busy;
+    QString reason;
+    const bool reached = runOnBus([this, host, net_port, token, &reason]{
+        return bus_->connectTransport(host, net_port, token, &reason);
+    });
+
+    link_up_ = reached;
+    if(!reached)
+    {
+        *error = reason;
+        return false;
+    }
+
+    status_clock_aligned_ = false;
+    port_refresh_due_ = true;
+    return true;
+}
+
+void MainWindow::releaseLink()
+{
+    if(is_searching_)
+    {
+        bus_->abortScan();
+        is_searching_ = false;
+        ui->SearchButton->setText("Search");
+    }
+
+    runOnBus([this]{
+        bus_->close();
+        bus_->disconnectTransport();
+        return true;
+    });
+
+    link_up_ = !bus_->isRemote();
+    bus_open_ = false;
+    status_clock_aligned_ = false;
+    port_refresh_due_ = true;
+
+    ui->ComOpenButton->setText("Open");
+    setEnableComSettings(true);
+    select_servo_.id_ = -1;
+    clearServoList();
+    id_list_.clear();
+    torque_state_.clear();
+    fault_state_.clear();
+    updateFunctionalityGate();
+    updateTorqueAllButton();
+    updateLinkFields();
+    updateLinkStatus();
+}
+
+void MainWindow::onLinkModeChanged()
+{
+    if(bus_open_ || link_up_)
+        releaseLink();
+
+    rebuildBus(isNetworkMode());
+
+    // The dropdown was listing the other machine's ports.
+    com_port_names_.clear();
+    ui->ComComboBox->clear();
+
+    updateLinkFields();
+    updateLinkStatus();
+    onPortSearchTimerTimeout();
+}
+
+void MainWindow::onLinkStatusTimerTimeout()
+{
+    if(bus_->isRemote() && link_up_)
+        updateLinkStatus();
+}
+
+void MainWindow::onTransportLost(const QString &reason)
+{
+    if(!link_up_)
+        return;
+
+    link_up_ = false;
+    bus_open_ = false;
+    status_clock_aligned_ = false;
+
+    if(is_searching_)
+    {
+        is_searching_ = false;
+        ui->SearchButton->setText("Search");
+    }
+
+    ui->ComOpenButton->setText("Open");
+    setEnableComSettings(true);
+    select_servo_.id_ = -1;
+    clearServoList();
+    id_list_.clear();
+    torque_state_.clear();
+    fault_state_.clear();
+    updateFunctionalityGate();
+    updateTorqueAllButton();
+    updateLinkFields();
+
+    // Deliberately not a dialog. The link can drop while the user is watching
+    // the plot rather than this panel, and a modal box would stop every timer
+    // in the window behind it -- including the ones that would notice the link
+    // coming back.
+    ui->linkStatusLabel->setText(reason);
+}
+
 void MainWindow::onConnectButtonClicked()
 {
-    if (bus_open_) {
-        runOnBus([this]{ bus_->close(); return true; });
-        ui->ComOpenButton->setText("Open");
-        setEnableComSettings(true);
-        select_servo_.id_ = -1;
-        clearServoList();
-        id_list_.clear();
-        torque_state_.clear();
-        fault_state_.clear();
-        updateFunctionalityGate();
-        updateTorqueAllButton();
+    if(bus_open_)
+    {
+        releaseLink();
+        return;
     }
-    else {
-        // The visible text carries the device description too, so the port name
-        // comes from the item data rather than from what is on screen.
-        const QString port = ui->ComComboBox->currentData().toString();
-        if(port.isEmpty())
+
+    // In network mode there is no port to choose until the machine holding it
+    // has been reached. Doing that here rather than behind a second button
+    // keeps this one meaning a single thing: make the bus usable.
+    //
+    // Done on every press, not only the first: connectTransport lets go of any
+    // link it already has, so pressing Open again after editing the host or
+    // the token does what it looks like it does.
+    if(bus_->isRemote())
+    {
+        QString error;
+        if(!reachLink(&error))
         {
-            QMessageBox::warning(this, "Open", "No serial port selected.");
+            ui->linkStatusLabel->setText(error);
+            QMessageBox::warning(this, "Connect", error);
             return;
         }
-        const int baud = ui->BaudComboBox->currentText().toInt();
-        uint8_t pidx = ui->ParityComboBox->currentIndex();
-        QSerialPort::Parity p = QSerialPort::Parity::NoParity;
-        if(pidx == 1)
-            p = QSerialPort::Parity::OddParity;
-        if(pidx == 2)
-            p = QSerialPort::Parity::EvenParity;
-        const int timeout = ui->timeoutLineEdit->text().toUInt();
 
-        const bool opened = runOnBus([this, port, baud, p, timeout]{
-            return bus_->open(port, baud, p, timeout);
-        });
-
-        if (opened) {
-            ui->ComOpenButton->setText("Close");
-            setEnableComSettings(false);
-        }
-        else {
-            ui->ComOpenButton->setText("Open");
-        }
+        updateLinkFields();
+        updateLinkStatus();
+        // The dropdown was empty, or listing this machine's ports.
+        onPortSearchTimerTimeout();
     }
+
+    // The visible text carries the device description too, so the port name
+    // comes from the item data rather than from what is on screen.
+    const QString port = ui->ComComboBox->currentData().toString();
+    if(port.isEmpty())
+    {
+        QMessageBox::warning(this, "Open", bus_->isRemote()
+            ? "The server reports no serial ports."
+            : "No serial port selected.");
+        return;
+    }
+
+    const int baud = ui->BaudComboBox->currentText().toInt();
+    uint8_t pidx = ui->ParityComboBox->currentIndex();
+    QSerialPort::Parity p = QSerialPort::Parity::NoParity;
+    if(pidx == 1)
+        p = QSerialPort::Parity::OddParity;
+    if(pidx == 2)
+        p = QSerialPort::Parity::EvenParity;
+    const int timeout = ui->timeoutLineEdit->text().toUInt();
+
+    const bool opened = runOnBus([this, port, baud, p, timeout]{
+        return bus_->open(port, baud, p, timeout);
+    });
+
+    if(opened)
+    {
+        ui->ComOpenButton->setText("Close");
+        setEnableComSettings(false);
+    }
+    else
+    {
+        ui->ComOpenButton->setText("Open");
+        QMessageBox::warning(this, "Open", bus_->isRemote()
+            ? QString("The server could not open %1.").arg(port)
+            : QString("Could not open %1.").arg(port));
+    }
+    updateLinkFields();
 }
 
 // The bus emits this from inside open()/close(), so it is queued to this
 // thread ahead of the reply runOnBus is waiting on. By the time an open() or
 // close() call returns, bus_open_ has already caught up.
+//
+// On a remote bus it also arrives unasked, when the server's port opens or
+// closes for a reason of its own, so the panel follows the bus rather than
+// only following the button that was pressed here.
 void MainWindow::onBusOpenedChanged(bool is_open)
 {
     bus_open_ = is_open;
+
+    ui->ComOpenButton->setText(is_open ? "Close" : "Open");
+    setEnableComSettings(!is_open);
+    updateFunctionalityGate();
+    updateLinkFields();
 }
 
 void MainWindow::onSearchButtonClicked()
 {
     if(!bus_open_)
-    {
-        qDebug() << "serial not open";
         return;
-    }
-
-    is_searching_ = !is_searching_;
 
     if(is_searching_)
     {
-        ui->SearchButton->setText("Stop");
-        clearServoList();
-        id_list_.clear();
-        torque_state_.clear();
-        fault_state_.clear();
+        // The bus thread is inside the sweep and could not service a queued
+        // call until it ended, so this is the one bus call made straight from
+        // here rather than posted.
+        bus_->abortScan();
+        ui->ServoSearchText->setText("Stopping...");
+        return;
+    }
+
+    is_searching_ = true;
+    ui->SearchButton->setText("Stop");
+    clearServoList();
+    id_list_.clear();
+    torque_state_.clear();
+    fault_state_.clear();
+    updateFunctionalityGate();
+
+    // One operation rather than a ping per address. Locally that only saves
+    // the round trip through this thread; over a network it is the difference
+    // between one request and five hundred.
+    postToBus([this]{
         // The IDs on the bus may be different servos this time round.
-        postToBus([this]{ bus_->invalidateModeCaches(); });
-        updateFunctionalityGate();
-        search_id_ = 0;
-        search_timer_->start(10);
-        onSearchTimerTimeout();
-    }
-    else
-    {
-        ui->SearchButton->setText("Search");
-        search_timer_->stop();
-        ui->ServoSearchText->setText(QString("Stop"));
-    }
+        bus_->invalidateModeCaches();
+        bus_->startScan(0, 0xfd);
+    });
 }
 
-void MainWindow::onSearchTimerTimeout()
+void MainWindow::onScanProgress(int id)
 {
-    search_timer_->stop();
-    if(!is_searching_)
-        return;
+    ui->ServoSearchText->setText(QString("Ping ID:%1 Servo...").arg(id));
+}
 
-    // A longer operation has the bus. Come back to the scan once it is done.
-    if(pollsSuspended())
-    {
-        search_timer_->start(10);
-        return;
-    }
+void MainWindow::onScanFound(int id, int model_number)
+{
+    const QString name = feetech_servo::getModelType(model_number);
+    appendServoList(id, name);
+    id_list_.push_back(static_cast<uint8_t>(id));
+    select_servo_.id_ = id;
+    selectServoSeries(feetech_servo::getModelSeries(name));
+}
 
-    if(0xfd < search_id_ || !bus_open_)
-    {
-        is_searching_ = false;
-        ui->SearchButton->setText("Search");
-        ui->ServoSearchText->setText("Stop");
-        refreshTorqueStates();
-        updateFunctionalityGate();
-    }
-    else
-    {
-        ui->ServoSearchText->setText(QString("Ping ID:%1 Servo...").arg(search_id_));
-        const int probe_id = search_id_;
-        int ret = runOnBus([this, probe_id]{ return bus_->ping(static_cast<uint8_t>(probe_id)); });
-
-        if(0 < ret)
-        {
-            int mid = runOnBus([this, ret]{ return bus_->readModelNumber(static_cast<uint8_t>(ret)); });
-            QString name = feetech_servo::getModelType(mid);
-            appendServoList(ret, name);
-            id_list_.push_back(ret);
-            select_servo_.id_ = ret;
-            selectServoSeries(feetech_servo::getModelSeries(name));
-        }
-        search_id_++;
-        search_timer_->start(1);
-
-    }
+void MainWindow::onScanFinished(bool)
+{
+    is_searching_ = false;
+    ui->SearchButton->setText("Search");
+    ui->ServoSearchText->setText("Stop");
+    refreshTorqueStates();
+    updateFunctionalityGate();
 }
 
 void MainWindow::onServoListSelection()
@@ -2397,9 +2650,25 @@ void MainWindow::onStatusReady(const feetech_servo::ServoStatus &status)
     if(status.id == select_servo_.id_)
     {
         latest_status_ = status;
+
+        // Line the sampling machine's clock up with the plot's, once per link,
+        // then draw every sample at the moment it was actually taken. Stamping
+        // them on arrival instead would draw the link's jitter as though the
+        // servo had moved.
+        qint64 sample_ms = -1;
+        if(status.t_ms >= 0)
+        {
+            if(!status_clock_aligned_)
+            {
+                status_clock_offset_ = ui->graphWidget->elapsed() - status.t_ms;
+                status_clock_aligned_ = true;
+            }
+            sample_ms = status.t_ms + status_clock_offset_;
+        }
+
         ui->graphWidget->append_data(latest_status_.pos, latest_status_.goal, latest_status_.torque,
                                      latest_status_.speed, latest_status_.current, latest_status_.temp,
-                                     latest_status_.voltage);
+                                     latest_status_.voltage, sample_ms);
     }
 
     QTimer::singleShot(STATUS_POLL_GAP_MS, this, &MainWindow::requestNextStatus);

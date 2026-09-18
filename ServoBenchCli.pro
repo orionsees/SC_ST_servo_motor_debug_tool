@@ -1,4 +1,4 @@
-QT += core serialport
+QT += core network serialport
 QT -= gui
 
 CONFIG += c++17 console
@@ -15,11 +15,17 @@ SOURCES += \
     src/cli/session.cpp \
     src/cli/term.cpp \
     src/cli/tui.cpp \
+    src/net/bus_server.cpp \
+    src/net/protocol.cpp \
+    src/net/remote_bus.cpp \
     src/servo/scserial.cpp \
     src/servo/servo_bus.cpp
 
 HEADERS += \
     src/cli/commands.h \
+    src/net/bus_server.h \
+    src/net/protocol.h \
+    src/net/remote_bus.h \
     src/cli/plot.h \
     src/cli/session.h \
     src/cli/term.h \
@@ -27,6 +33,7 @@ HEADERS += \
     src/calibration_json.h \
     src/confirm_steps.h \
     src/register_snapshot.h \
+    src/servo/port_list.h \
     src/servo/scserial.h \
     src/servo/scscl.h \
     src/servo/servo_bus.h \
